@@ -7,7 +7,7 @@ use bit_set::{self, BitSet};
 
 use super::ir::IR;
 
-pub trait Automaton {
+pub(crate) trait Automaton {
     fn accept(&self, b: &[u8]) -> bool;
 }
 
@@ -53,7 +53,7 @@ impl Debug for NFAEntry {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct NFA {
+pub(crate) struct NFA {
     tbl: Vec<NFAEntry>,
 }
 
@@ -246,7 +246,7 @@ impl Default for DFAEntry {
     }
 }
 
-struct DFA {
+pub(crate) struct DFA {
     tbl: Vec<DFAEntry>,
 }
 
