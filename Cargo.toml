@@ -1,0 +1,13 @@
+[package]
+name = "sccc"
+version = "0.1.0"
+authors = ["Marcus Xu <xumarcus.sg@gmail.com>"]
+edition = "2021"
+
+[workspace]
+members = [
+    "crates/regex"
+]
+
+[dependencies]
+regex = { path = "crates/regex" }
