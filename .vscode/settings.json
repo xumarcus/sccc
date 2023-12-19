@@ -1,6 +1,8 @@
 {
     "rust-analyzer.linkedProjects": [
         "./crates/regex/Cargo.toml",
+        "./crates/regex/Cargo.toml",
+        "./crates/regex/Cargo.toml",
         "./crates/regex/Cargo.toml"
     ]
 }
