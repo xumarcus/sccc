@@ -58,7 +58,7 @@ pub(crate) struct NFA {
 }
 
 impl NFA {
-    pub fn new(ir: &IR) -> Self {
+    pub(crate) fn new(ir: &IR) -> Self {
         let mut nfa = Self {
             tbl: vec![NFAEntry::default()],
         };
@@ -71,7 +71,7 @@ impl NFA {
         self.tbl.len() - 1
     }
 
-    fn thompson(&mut self, ir: &IR, q: usize) -> usize {
+    fn thompson(&mut self, ir: &IR, mut q: usize) -> usize {
         use IR::*;
         match ir {
             E => {
@@ -85,32 +85,36 @@ impl NFA {
                 self.tbl[q].t[a].push(f);
                 f
             }
-            U(a, b) => {
-                let sa = self.new_entry();
-                let fa = self.thompson(a, sa);
-                let sb = self.new_entry();
-                let fb = self.thompson(b, sb);
-                let f = self.new_entry();
-                self.tbl[q].epsilon.push(sa);
-                self.tbl[q].epsilon.push(sb);
-                self.tbl[fa].epsilon.push(f);
-                self.tbl[fb].epsilon.push(f);
-                f
+            U(v) => {
+                let fs: Vec<usize> = v
+                    .iter()
+                    .map(|x| {
+                        let s = self.new_entry();
+                        self.tbl[q].epsilon.push(s);
+                        self.thompson(x, s)
+                    })
+                    .collect();
+                let ff = self.new_entry();
+                for f in fs {
+                    self.tbl[f].epsilon.push(ff);
+                }
+                ff
             }
-            C(a, b) => {
-                let fa = self.thompson(a, q);
-                let fb = self.thompson(b, fa);
-                fb
+            C(v) => {
+                for x in v {
+                    q = self.thompson(x, q);
+                }
+                q
             }
-            K(a) => {
-                let sa = self.new_entry();
-                let fa = self.thompson(a, sa);
-                let f = self.new_entry();
-                self.tbl[q].epsilon.push(sa);
-                self.tbl[q].epsilon.push(f);
-                self.tbl[fa].epsilon.push(sa);
-                self.tbl[fa].epsilon.push(f);
-                f
+            K(x) => {
+                let s = self.new_entry();
+                let f = self.thompson(x, s);
+                let ff = self.new_entry();
+                self.tbl[q].epsilon.push(s);
+                self.tbl[q].epsilon.push(ff);
+                self.tbl[f].epsilon.push(s);
+                self.tbl[f].epsilon.push(ff);
+                ff
             }
         }
     }
@@ -251,7 +255,7 @@ pub(crate) struct DFA {
 }
 
 impl DFA {
-    pub fn new(ir: &IR) -> Self {
+    pub(crate) fn new(ir: &IR) -> Self {
         Self::from(NFA::new(ir))
     }
 }
@@ -296,35 +300,23 @@ mod tests {
 
     // ((a*b)?)
     fn ir_simple() -> IR {
-        let a = Box::new(L(b'a'));
-        let b = Box::new(L(b'b'));
-        let c = Box::new(C(Box::new(K(a)), b));
-        U(Box::new(E), c)
+        U(vec![E, C(vec![K(Box::new(L(b'a'))), L(b'b')])])
     }
 
     fn ir() -> IR {
-        K(Box::new(U(
-            Box::new(L(b'0')),
-            Box::new(K(Box::new(C(
-                Box::new(L(b'1')),
-                Box::new(C(
-                    Box::new(K(Box::new(C(
-                        Box::new(L(b'0')),
-                        Box::new(C(
-                            Box::new(C(
-                                Box::new(K(Box::new(L(b'1')))),
-                                Box::new(K(Box::new(C(
-                                    Box::new(L(b'0')),
-                                    Box::new(L(b'0')),
-                                )))),
-                            )),
-                            Box::new(L(b'0')),
-                        )),
-                    )))),
-                    Box::new(L(b'1')),
-                )),
-            )))),
-        )))
+        K(Box::new(U(vec![
+            L(b'0'),
+            K(Box::new(C(vec![
+                L(b'1'),
+                K(Box::new(C(vec![
+                    L(b'0'),
+                    K(Box::new(L(b'1'))),
+                    K(Box::new(C(vec![L(b'0'), L(b'0')]))),
+                    L(b'0'),
+                ]))),
+                L(b'1'),
+            ]))),
+        ])))
     }
 
     #[test]
