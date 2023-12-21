@@ -1,8 +1,10 @@
 use automata::{Automaton, DFA};
+use combinator::Parser;
 use ir::IR;
-use parser::{ast_regex, Parser};
+use parser::ast_regex;
 
 mod automata;
+mod combinator;
 mod ir;
 mod parser;
 
@@ -29,6 +31,13 @@ mod tests {
     fn regex_new() {
         assert!(Regex::new(r"\w?".as_bytes()).is_none());
         assert!(Regex::new(r"a(b(c(d)+)*)?(e(f)?(g)?)*".as_bytes()).is_some());
+    }
+
+    #[test]
+    fn regex_email() {
+        let x = Regex::new(r"(\w)+(.(\w)+)?@(\w)+.(\w)+".as_bytes()).unwrap();
+        assert!(x.accept("xumarcus.sg@gmail.com".as_bytes()));
+        assert!(!x.accept("notan.email@com".as_bytes()));
     }
 
     #[test]
