@@ -1,6 +1,6 @@
 use std::{iter::successors, rc::Rc};
 
-pub(crate) trait Parser {
+pub trait Parser {
     type Item;
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])>;
 
@@ -87,7 +87,7 @@ impl<P: Parser> Parser for Rc<P> {
     }
 }
 
-pub(crate) struct Collect<P: Parser>(P);
+pub struct Collect<P: Parser>(P);
 impl<P: Parser> Parser for Collect<P> {
     type Item = Vec<P::Item>;
     fn run<'a, 'b>(
@@ -100,7 +100,7 @@ impl<P: Parser> Parser for Collect<P> {
     }
 }
 
-pub(crate) struct And<P: Parser, Q: Parser>(P, Q);
+pub struct And<P: Parser, Q: Parser>(P, Q);
 impl<P: Parser, Q: Parser> Parser for And<P, Q> {
     type Item = (P::Item, Q::Item);
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
@@ -110,7 +110,7 @@ impl<P: Parser, Q: Parser> Parser for And<P, Q> {
     }
 }
 
-pub(crate) struct Or<P: Parser, Q: Parser<Item = P::Item>>(P, Q);
+pub struct Or<P: Parser, Q: Parser<Item = P::Item>>(P, Q);
 impl<P: Parser, Q: Parser<Item = P::Item>> Parser for Or<P, Q> {
     type Item = P::Item;
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
@@ -118,7 +118,7 @@ impl<P: Parser, Q: Parser<Item = P::Item>> Parser for Or<P, Q> {
     }
 }
 
-pub(crate) struct Bind<P: Parser, Q: Parser, F: Fn(P::Item) -> Q>(P, F);
+pub struct Bind<P: Parser, Q: Parser, F: Fn(P::Item) -> Q>(P, F);
 impl<P: Parser, Q: Parser, F: Fn(P::Item) -> Q> Parser for Bind<P, Q, F> {
     type Item = Q::Item;
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
@@ -127,7 +127,7 @@ impl<P: Parser, Q: Parser, F: Fn(P::Item) -> Q> Parser for Bind<P, Q, F> {
     }
 }
 
-pub(crate) struct Then<P: Parser, Q: Parser>(P, Q);
+pub struct Then<P: Parser, Q: Parser>(P, Q);
 impl<P: Parser, Q: Parser> Parser for Then<P, Q> {
     type Item = Q::Item;
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
@@ -136,7 +136,7 @@ impl<P: Parser, Q: Parser> Parser for Then<P, Q> {
     }
 }
 
-pub(crate) struct Skip<P: Parser, Q: Parser>(P, Q);
+pub struct Skip<P: Parser, Q: Parser>(P, Q);
 impl<P: Parser, Q: Parser> Parser for Skip<P, Q> {
     type Item = P::Item;
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
@@ -146,7 +146,7 @@ impl<P: Parser, Q: Parser> Parser for Skip<P, Q> {
     }
 }
 
-pub(crate) struct Map<P: Parser, T, F: Fn(P::Item) -> T>(P, F);
+pub struct Map<P: Parser, T, F: Fn(P::Item) -> T>(P, F);
 impl<P: Parser, T, F: Fn(P::Item) -> T> Parser for Map<P, T, F> {
     type Item = T;
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
@@ -155,7 +155,7 @@ impl<P: Parser, T, F: Fn(P::Item) -> T> Parser for Map<P, T, F> {
     }
 }
 
-pub(crate) struct Filter<P: Parser, F: Fn(&P::Item) -> bool>(P, F);
+pub struct Filter<P: Parser, F: Fn(&P::Item) -> bool>(P, F);
 impl<P: Parser, F: Fn(&P::Item) -> bool> Parser for Filter<P, F> {
     type Item = P::Item;
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
@@ -163,7 +163,7 @@ impl<P: Parser, F: Fn(&P::Item) -> bool> Parser for Filter<P, F> {
     }
 }
 
-pub(crate) struct FilterMap<P: Parser, T, F: Fn(P::Item) -> Option<T>>(P, F);
+pub struct FilterMap<P: Parser, T, F: Fn(P::Item) -> Option<T>>(P, F);
 impl<P: Parser, T, F: Fn(P::Item) -> Option<T>> Parser for FilterMap<P, T, F> {
     type Item = T;
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
@@ -172,7 +172,7 @@ impl<P: Parser, T, F: Fn(P::Item) -> Option<T>> Parser for FilterMap<P, T, F> {
     }
 }
 
-pub(crate) struct PChar;
+pub struct PChar;
 impl Parser for PChar {
     type Item = u8;
     fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
@@ -181,11 +181,11 @@ impl Parser for PChar {
     }
 }
 
-pub(crate) fn satisfy(a: u8) -> impl Parser<Item = ()> {
+pub fn satisfy(a: u8) -> impl Parser<Item = ()> {
     PChar.filter_map(move |x| if x == a { Some(()) } else { None })
 }
 
-pub(crate) fn between<P: Parser>(
+pub fn between<P: Parser>(
     p: P,
     op: u8,
     cl: u8,
@@ -193,7 +193,7 @@ pub(crate) fn between<P: Parser>(
     satisfy(op).then(p).skip(satisfy(cl))
 }
 
-pub(crate) fn intersperse<P: Parser>(
+pub fn intersperse<P: Parser>(
     p: P,
     sep: u8,
 ) -> impl Parser<Item = Vec<P::Item>> {

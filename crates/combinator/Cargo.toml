@@ -1,10 +1,6 @@
 [package]
-name = "regex"
+name = "combinator"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-bit-set = "0.5.3"
-combinator = { path = "../../crates/combinator" }

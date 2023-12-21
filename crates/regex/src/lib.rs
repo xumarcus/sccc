@@ -4,7 +4,6 @@ use ir::IR;
 use parser::ast_regex;
 
 mod automata;
-mod combinator;
 mod ir;
 mod parser;
 
