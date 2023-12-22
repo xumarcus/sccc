@@ -1,4 +1,4 @@
-use regex;
+use lexer;
 
 fn main() {
     println!("Hi!");

@@ -2,7 +2,11 @@ use std::{iter::successors, rc::Rc};
 
 pub trait Parser {
     type Item;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])>;
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])>;
+
+    fn accept(&self, s: &[u8]) -> bool {
+        matches!(self.run(s), Some((_, [])))
+    }
 
     fn collect(self) -> Collect<Self>
     where
@@ -66,23 +70,19 @@ pub trait Parser {
     }
 }
 
-impl<T> Parser for Box<dyn Parser<Item = T>> {
+// macro?
+impl<T> Parser for Box<dyn Parser<Item = T>>
+{
     type Item = T;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         self.as_ref().run(s)
     }
 }
 
-impl<P: Parser> Parser for Box<P> {
+impl<P: Parser> Parser for Rc<P>
+{
     type Item = P::Item;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
-        self.as_ref().run(s)
-    }
-}
-
-impl<P: Parser> Parser for Rc<P> {
-    type Item = P::Item;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         self.as_ref().run(s)
     }
 }
@@ -90,8 +90,8 @@ impl<P: Parser> Parser for Rc<P> {
 pub struct Collect<P: Parser>(P);
 impl<P: Parser> Parser for Collect<P> {
     type Item = Vec<P::Item>;
-    fn run<'a, 'b>(
-        &'b self,
+    fn run<'a>(
+        &self,
         s: &'a [u8],
     ) -> Option<(Self::Item, &'a [u8])> {
         let (v, mut t): (Self::Item, Vec<&'a [u8]>) =
@@ -103,7 +103,7 @@ impl<P: Parser> Parser for Collect<P> {
 pub struct And<P: Parser, Q: Parser>(P, Q);
 impl<P: Parser, Q: Parser> Parser for And<P, Q> {
     type Item = (P::Item, Q::Item);
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (x, t) = self.0.run(s)?;
         let (y, u) = self.1.run(t)?;
         Some(((x, y), u))
@@ -113,7 +113,7 @@ impl<P: Parser, Q: Parser> Parser for And<P, Q> {
 pub struct Or<P: Parser, Q: Parser<Item = P::Item>>(P, Q);
 impl<P: Parser, Q: Parser<Item = P::Item>> Parser for Or<P, Q> {
     type Item = P::Item;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         self.0.run(s).or_else(|| self.1.run(s))
     }
 }
@@ -121,7 +121,7 @@ impl<P: Parser, Q: Parser<Item = P::Item>> Parser for Or<P, Q> {
 pub struct Bind<P: Parser, Q: Parser, F: Fn(P::Item) -> Q>(P, F);
 impl<P: Parser, Q: Parser, F: Fn(P::Item) -> Q> Parser for Bind<P, Q, F> {
     type Item = Q::Item;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (x, t) = self.0.run(s)?;
         self.1(x).run(t)
     }
@@ -130,7 +130,7 @@ impl<P: Parser, Q: Parser, F: Fn(P::Item) -> Q> Parser for Bind<P, Q, F> {
 pub struct Then<P: Parser, Q: Parser>(P, Q);
 impl<P: Parser, Q: Parser> Parser for Then<P, Q> {
     type Item = Q::Item;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (_, t) = self.0.run(s)?;
         self.1.run(t)
     }
@@ -139,7 +139,7 @@ impl<P: Parser, Q: Parser> Parser for Then<P, Q> {
 pub struct Skip<P: Parser, Q: Parser>(P, Q);
 impl<P: Parser, Q: Parser> Parser for Skip<P, Q> {
     type Item = P::Item;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (x, t) = self.0.run(s)?;
         let (_, s) = self.1.run(t)?;
         Some((x, s))
@@ -149,7 +149,7 @@ impl<P: Parser, Q: Parser> Parser for Skip<P, Q> {
 pub struct Map<P: Parser, T, F: Fn(P::Item) -> T>(P, F);
 impl<P: Parser, T, F: Fn(P::Item) -> T> Parser for Map<P, T, F> {
     type Item = T;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (x, t) = self.0.run(s)?;
         Some((self.1(x), t))
     }
@@ -158,7 +158,7 @@ impl<P: Parser, T, F: Fn(P::Item) -> T> Parser for Map<P, T, F> {
 pub struct Filter<P: Parser, F: Fn(&P::Item) -> bool>(P, F);
 impl<P: Parser, F: Fn(&P::Item) -> bool> Parser for Filter<P, F> {
     type Item = P::Item;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         self.0.run(s).filter(|(x, _)| self.1(x))
     }
 }
@@ -166,7 +166,7 @@ impl<P: Parser, F: Fn(&P::Item) -> bool> Parser for Filter<P, F> {
 pub struct FilterMap<P: Parser, T, F: Fn(P::Item) -> Option<T>>(P, F);
 impl<P: Parser, T, F: Fn(P::Item) -> Option<T>> Parser for FilterMap<P, T, F> {
     type Item = T;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (x, t) = self.0.run(s)?;
         Some((self.1(x)?, t))
     }
@@ -175,7 +175,7 @@ impl<P: Parser, T, F: Fn(P::Item) -> Option<T>> Parser for FilterMap<P, T, F> {
 pub struct PChar;
 impl Parser for PChar {
     type Item = u8;
-    fn run<'a, 'b>(&'b self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (h, t) = s.split_first()?;
         Some((*h, t))
     }

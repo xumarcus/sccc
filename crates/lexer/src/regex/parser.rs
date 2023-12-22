@@ -12,7 +12,7 @@ pub(crate) enum AST {
     QnMk(Box<AST>),
 }
 use AST::*;
-use combinator::*;
+use crate::combinator::*;
 
 fn ast_dws() -> impl Parser<Item = AST> {
     satisfy(b'\\').then(PChar.filter_map(|x| match x {

@@ -1,14 +1,5 @@
 use super::parser::AST;
-
-// TODO: refactor to Vec<IR> instead of Box
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum IR {
-    E,
-    L(u8),
-    U(Vec<IR>),
-    C(Vec<IR>),
-    K(Box<IR>),
-}
+use crate::automata::IR;
 
 impl IR {
     pub fn new(ast: AST) -> Self {
@@ -38,9 +29,10 @@ impl IR {
 
 #[cfg(test)]
 mod tests {
-    use crate::automata::Automaton;
-    use crate::automata::DFA;
-    use crate::ir::IR;
+    use crate::automata::IR;
+    use crate::automata::dfa::DFA;
+    use crate::automata::nfa::NFA;
+    use crate::combinator::Parser;
 
     use super::AST::*;
     use super::IR::*;
@@ -84,7 +76,9 @@ mod tests {
             QnMk(Box::new(Conc(vec![Char(b'.'), Plus(Box::new(DChr))]))),
         ]);
         let ir = IR::new(ast);
-        let dfa = DFA::new(&ir);
+        let mut nfa = NFA::new();
+        nfa.extend_with(&ir);
+        let dfa = DFA::new(&nfa);
         assert!(dfa.accept("-1.234".as_bytes()));
         assert!(dfa.accept("1234".as_bytes()));
         assert!(!dfa.accept("".as_bytes()));

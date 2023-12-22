@@ -1,40 +1,50 @@
-use automata::{Automaton, DFA};
-use combinator::Parser;
-use ir::IR;
-use parser::ast_regex;
+use std::str::FromStr;
 
-mod automata;
-mod ir;
-mod parser;
+use crate::{automata::IR, combinator::Parser};
 
-pub struct Regex(DFA);
+use self::parser::ast_regex;
 
-impl Regex {
-    pub fn new(r: &[u8]) -> Option<Self> {
-        let (ast, _) = ast_regex(10).run(r).filter(|(_, t)| t.is_empty())?;
-        let ir = IR::new(ast);
-        let dfa = DFA::new(&ir);
-        Some(Regex(dfa))
-    }
+pub mod ir;
+pub mod parser;
 
-    pub fn accept(&self, s: &[u8]) -> bool {
-        self.0.accept(s)
+#[derive(Clone, Copy, Debug)]
+pub struct ParseRegexError;
+
+impl FromStr for IR {
+    type Err = ParseRegexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (ast, t) = ast_regex(10).run(s.as_bytes()).ok_or(ParseRegexError)?;
+        if t.is_empty() {
+            Ok(IR::new(ast))
+        } else {
+            Err(ParseRegexError)
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::{automata::{dfa::DFA, nfa::NFA}, combinator::Parser};
     use super::*;
+
+    fn dfa_from_regex(r: &str) -> Result<DFA, ParseRegexError> {
+        let ir = r.parse()?;
+        let mut nfa = NFA::new();
+        nfa.extend_with(&ir);
+        let dfa = DFA::new(&nfa);
+        Ok(dfa)
+    }
 
     #[test]
     fn regex_new() {
-        assert!(Regex::new(r"\w?".as_bytes()).is_none());
-        assert!(Regex::new(r"a(b(c(d)+)*)?(e(f)?(g)?)*".as_bytes()).is_some());
+        assert!(dfa_from_regex(r"\w?").is_err());
+        assert!(dfa_from_regex(r"a(b(c(d)+)*)?(e(f)?(g)?)*").is_ok());
     }
 
     #[test]
     fn regex_email() {
-        let x = Regex::new(r"(\w)+(.(\w)+)?@(\w)+.(\w)+".as_bytes()).unwrap();
+        let x = dfa_from_regex(r"(\w)+(.(\w)+)?@(\w)+.(\w)+").unwrap();
         assert!(x.accept("xumarcus.sg@gmail.com".as_bytes()));
         assert!(!x.accept("notan.email@com".as_bytes()));
     }
@@ -64,7 +74,7 @@ mod tests {
             (r"a[bc]d", "abd", true),
         ];
         for (r, s, b) in data {
-            let x = Regex::new(r.as_bytes()).unwrap();
+            let x = dfa_from_regex(r).unwrap();
             assert_eq!(x.accept(s.as_bytes()), b, "{} {} {}", r, s, b);
         }
     }

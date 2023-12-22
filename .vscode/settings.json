@@ -3,6 +3,9 @@
         "./crates/regex/Cargo.toml",
         "./crates/regex/Cargo.toml",
         "./crates/regex/Cargo.toml",
-        "./crates/regex/Cargo.toml"
+        "./crates/regex/Cargo.toml",
+        "./crates/regex/Cargo.toml",
+        "./crates/automata/Cargo.toml",
+        "./crates/lexer/Cargo.toml"
     ]
 }

@@ -6,9 +6,8 @@ edition = "2021"
 
 [workspace]
 members = [
-    "crates/regex",
-    "crates/combinator",
+    "crates/lexer",
 ]
 
 [dependencies]
-regex = { path = "crates/regex" }
+lexer = { path = "crates/lexer" }
