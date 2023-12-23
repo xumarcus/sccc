@@ -5,6 +5,7 @@ pub enum MetaCharacter {
     L,
     S,
     W,
+    Dot,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,7 +24,7 @@ use crate::combinator::*;
 use MetaCharacter::*;
 use AST::*;
 
-fn ast_dws() -> impl Parser<Item = AST> {
+fn ast_escaped() -> impl Parser<Item = AST> {
     satisfy(b'\\').then(
         PChar
             .filter_map(|x| match x {
@@ -38,8 +39,9 @@ fn ast_dws() -> impl Parser<Item = AST> {
     )
 }
 
-const ESCAPED: [u8; 9] =
-    [b'*', b'+', b'?', b'|', b'(', b')', b'[', b']', b'\\'];
+const ESCAPED: [u8; 12] = [
+    b'.', b'*', b'+', b'?', b'|', b'(', b')', b'[', b']', b'{', b'}', b'\\',
+];
 
 fn ast_char() -> impl Parser<Item = u8> {
     satisfy(b'\\')
@@ -65,7 +67,10 @@ fn cons(x: u8) -> Option<Box<dyn Fn(Box<AST>) -> AST>> {
 }
 
 fn ast_atom(depth: usize) -> Box<dyn Parser<Item = AST>> {
-    let p = ast_ccls().or(ast_dws()).or(ast_char().map(AST::Char));
+    let p = ast_ccls()
+        .or(ast_escaped())
+        .or(ast_char().map(AST::Char))
+        .or(satisfy(b'.').map(|_| Meta(Dot)));
     if depth == 0 {
         Box::new(p)
     } else {
@@ -99,9 +104,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pat_dws() {
+    fn pat_escaped() {
         let pattern = r"\d".as_bytes();
-        assert!(ast_dws().accept(pattern));
+        assert!(ast_escaped().accept(pattern));
     }
 
     #[test]
@@ -137,7 +142,10 @@ mod tests {
     #[test]
     fn pat_no_bracket() {
         let pattern = r"\w?".as_bytes();
-        assert!(matches!(ast_regex(1).run(pattern), Some((Meta(MetaCharacter::W), [b'?']))));
+        assert!(matches!(
+            ast_regex(1).run(pattern),
+            Some((Meta(MetaCharacter::W), [b'?']))
+        ));
     }
 
     #[test]

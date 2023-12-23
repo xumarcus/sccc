@@ -1,23 +1,23 @@
-use super::{Automaton, util::*, Category, IR};
+use super::{util::*, Automaton, Category, IR};
 use bit_set::{self, BitSet};
 use std::fmt::{self, Debug, Formatter};
 
 #[derive(Clone, PartialEq, Eq)]
-struct NFAEntry {
-    epsilon: Vec<usize>,
-    t: [Vec<usize>; SIGMA],
+struct NFANode {
+    epsilon: BitSet,
+    t: [BitSet; SIGMA],
 }
 
-impl Default for NFAEntry {
+impl Default for NFANode {
     fn default() -> Self {
         Self {
-            epsilon: Vec::new(),
-            t: initialize(Vec::new),
+            epsilon: BitSet::new(),
+            t: initialize(BitSet::new),
         }
     }
 }
 
-impl Debug for NFAEntry {
+impl Debug for NFANode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let strs = self
             .t
@@ -36,28 +36,55 @@ impl Debug for NFAEntry {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct NFA {
-    entries: Vec<NFAEntry>,
-    final_states: Vec<usize>,
+pub struct NFABuilder {
+    nodes: Vec<NFANode>,
+    fs: BitSet,
 }
 
-impl NFA {
+impl NFABuilder {
     pub fn new() -> Self {
         Self {
-            entries: vec![NFAEntry::default()],
-            final_states: Vec::new(),
+            nodes: vec![NFANode::default()],
+            fs: BitSet::new(),
         }
     }
 
-    fn add_state(&mut self) -> usize {
-        self.entries.push(NFAEntry::default());
-        self.entries.len() - 1
+    pub fn ir(mut self, ir: &IR) -> Self {
+        self.add_ir(ir);
+        self
     }
 
-    pub fn extend_with(&mut self, ir: &IR) {
+    pub fn add_ir(&mut self, ir: &IR) {
         let f = self.thompson(ir, 0);
-        self.final_states.push(f);
+        self.fs.insert(f);
+    }
+
+    // complete epsilon closure for NFA instance
+    pub fn build(self) -> NFA {
+        let Self { mut nodes, fs } = self;
+        let n = nodes.len();
+        let mut mark = vec![true; n];
+        for (i, x) in nodes.iter_mut().enumerate() {
+            x.epsilon.insert(i);
+        }
+        for _ in 0..n {
+            for i in 0..n {
+                if mark[i] {
+                    let mut x = nodes[i].epsilon.clone();
+                    for j in &nodes[i].epsilon {
+                        x.union_with(&nodes[j].epsilon);
+                    }
+                    mark[i] = nodes[i].epsilon != x;
+                    nodes[i].epsilon = x;
+                }
+            }
+        }
+        NFA { nodes, fs }
+    }
+
+    fn add_state(&mut self) -> usize {
+        self.nodes.push(NFANode::default());
+        self.nodes.len() - 1
     }
 
     fn thompson(&mut self, ir: &IR, mut q: usize) -> usize {
@@ -65,13 +92,13 @@ impl NFA {
         match ir {
             E => {
                 let f = self.add_state();
-                self.entries[q].epsilon.push(f);
+                self.nodes[q].epsilon.insert(f);
                 f
             }
             L(x) => {
                 let f = self.add_state();
                 let a = *x as usize;
-                self.entries[q].t[a].push(f);
+                self.nodes[q].t[a].insert(f);
                 f
             }
             U(v) => {
@@ -79,13 +106,13 @@ impl NFA {
                     .iter()
                     .map(|x| {
                         let s = self.add_state();
-                        self.entries[q].epsilon.push(s);
+                        self.nodes[q].epsilon.insert(s);
                         self.thompson(x, s)
                     })
                     .collect();
                 let ff = self.add_state();
                 for f in fs {
-                    self.entries[f].epsilon.push(ff);
+                    self.nodes[f].epsilon.insert(ff);
                 }
                 ff
             }
@@ -99,52 +126,38 @@ impl NFA {
                 let s = self.add_state();
                 let f = self.thompson(x, s);
                 let ff = self.add_state();
-                self.entries[q].epsilon.push(s);
-                self.entries[q].epsilon.push(ff);
-                self.entries[f].epsilon.push(s);
-                self.entries[f].epsilon.push(ff);
+                self.nodes[q].epsilon.insert(s);
+                self.nodes[q].epsilon.insert(ff);
+                self.nodes[f].epsilon.insert(s);
+                self.nodes[f].epsilon.insert(ff);
                 ff
-            }
-        }
-    }
-
-    fn epsilon_closure(&self, mut s: BitSet) -> BitSet {
-        loop {
-            let t: BitSet = s
-                .iter()
-                .flat_map(|x| self.entries[x].epsilon.iter().cloned())
-                .collect();
-            if t.is_subset(&s) {
-                return s;
-            } else {
-                s.union_with(&t);
             }
         }
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct NFA {
+    nodes: Vec<NFANode>,
+    fs: BitSet,
+}
+
 impl Automaton for NFA {
     type State = BitSet;
     fn initial_state(&self) -> Self::State {
-        let mut s = BitSet::new();
-        s.insert(0);
-        self.epsilon_closure(s)
+        self.nodes[0].epsilon.clone()
     }
     fn transition(&self, q: &Self::State, x: u8) -> Option<Self::State> {
-        Some(
-            self.epsilon_closure(
-                q.iter()
-                    .flat_map(|a| self.entries[a].t[x as usize].iter().cloned())
-                    .collect(),
-            ),
-        )
-        .filter(|bs| !bs.is_empty())
+        let mut s = BitSet::new();
+        for i in q {
+            for j in &self.nodes[i].t[x as usize] {
+                s.union_with(&self.nodes[j].epsilon);
+            }
+        }
+        Some(s).filter(|t| !t.is_empty())
     }
     fn category(&self, q: &Self::State) -> Option<Category> {
-        self.final_states
-            .iter()
-            .position(|&f| q.contains(f))
-            .map(Category)
+        self.fs.iter().position(|f| q.contains(f)).map(Category)
     }
 }
 
@@ -154,20 +167,12 @@ mod tests {
     use super::*;
     use crate::combinator::Parser;
 
-    impl NFAEntry {
-        fn with_e(mut self, q: usize) -> Self {
-            self.epsilon.push(q);
-            self
-        }
-        fn with_t(mut self, x: u8, q: usize) -> Self {
-            self.t[x as usize].push(q);
-            self
-        }
+    fn ir_simple_1() -> IR {
+        U(vec![E, C(vec![K(Box::new(L(b'a'))), L(b'b')])])
     }
 
-    // ((a*b)?)
-    fn ir_simple() -> IR {
-        U(vec![E, C(vec![K(Box::new(L(b'a'))), L(b'b')])])
+    fn ir_simple_2() -> IR {
+        C(vec![L(b'a'), L(b'b'), L(b'c')])
     }
 
     fn ir() -> IR {
@@ -187,32 +192,9 @@ mod tests {
     }
 
     #[test]
-    fn nfa_new() {
-        let ir = ir_simple();
-        let mut nfa = NFA::new();
-        nfa.extend_with(&ir);
-        let ans = NFA {
-            entries: vec![
-                NFAEntry::default().with_e(1).with_e(3),
-                NFAEntry::default().with_e(2),
-                NFAEntry::default().with_e(8),
-                NFAEntry::default().with_e(4).with_e(6),
-                NFAEntry::default().with_t(b'a', 5),
-                NFAEntry::default().with_e(4).with_e(6),
-                NFAEntry::default().with_t(b'b', 7),
-                NFAEntry::default().with_e(8),
-                NFAEntry::default(),
-            ],
-            final_states: vec![8],
-        };
-        assert_eq!(nfa, ans);
-    }
-
-    #[test]
-    fn nfa_accept_simple() {
-        let ir = ir_simple();
-        let mut nfa = NFA::new();
-        nfa.extend_with(&ir);
+    fn nfa_accept_simple_1() {
+        let ir = ir_simple_1();
+        let nfa = NFABuilder::new().ir(&ir).build();
         assert!(nfa.accept("".as_bytes()));
         assert!(nfa.accept("aaab".as_bytes()));
         assert!(!nfa.accept("c".as_bytes()));
@@ -220,10 +202,19 @@ mod tests {
     }
 
     #[test]
+    fn nfa_accept_simple_2() {
+        let ir = ir_simple_2();
+        let nfa = NFABuilder::new().ir(&ir).build();
+        assert!(!nfa.accept("".as_bytes()));
+        assert!(nfa.accept("abc".as_bytes()));
+        assert!(!nfa.accept("abcd".as_bytes()));
+        assert!(!nfa.accept("cba".as_bytes()));
+    }
+
+    #[test]
     fn nfa_accept() {
         let ir = ir();
-        let mut nfa = NFA::new();
-        nfa.extend_with(&ir);
+        let nfa = NFABuilder::new().ir(&ir).build();
         for x in 0..20 {
             let s = format!("{:b}", x);
             assert_eq!(nfa.accept(s.as_bytes()), x % 3 == 0);

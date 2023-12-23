@@ -1,187 +1,138 @@
 // https://www.lysator.liu.se/c/ANSI-C-grammar-l.html
 
+use lexer::Lexer;
 use std::str::from_utf8;
 
-use lexer::Lexer;
+mod token;
+use token::{
+    KeywordToken::*,
+    LiteralToken::*,
+    OperatorToken::{self, *},
+    Token::{self, *},
+};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum KeywordToken {
-    Auto,
-    Break,
-    Case,
-    Char,
-    Const,
-    Continue,
-    Default,
-    Do,
-    Double,
-    Else,
-    Enum,
-    Extern,
-    Float,
-    For,
-    Goto,
-    If,
-    Int,
-    Long,
-    Register,
-    Return,
-    Short,
-    Signed,
-    Sizeof,
-    Static,
-    Struct,
-    Switch,
-    Typedef,
-    Union,
-    Unsigned,
-    Void,
-    Volatile,
-    While,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OperatorToken {
-    Ellipsis,
-    ShrAsn,
-    ShlAsn,
-    AddAsn,
-    SubAsn,
-    MulAsn,
-    DivAsn,
-    ModAsn,
-    AndAsn,
-    XorAsn,
-    OrAsn,
-    Shr,
-    Shl,
-    Inc,
-    Dec,
-    Ptr,
-    And,
-    Or,
-    Le,
-    Ge,
-    Eq,
-    Ne,
-    Semicolon,
-    LBrace,
-    RBrace,
-    Comma,
-    Colon,
-    Assign,
-    LParen,
-    RParen,
-    LSqBr,
-    RSqBr,
-    Dot,
-    BitAnd,
-    Not,
-    Minus,
-    Tilde,
-    Plus,
-    Ast,
-    Div,
-    Mod,
-    Lt,
-    Gt,
-    Caret,
-    BitOr,
-    QnMk,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum LiteralToken {
-    Integer(IntegerToken),
-    Float(FloatToken),
-    Char(u8),
-    String(String),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum IntegerToken {
-    L(i32),
-    LL(i64),
-    UL(u32),
-    ULL(u64),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum FloatToken {
-    F(f32),
-    L(f64),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Token {
-    Comment(String),
-    Keyword(KeywordToken),
-    Operator(OperatorToken),
-    Literal(LiteralToken),
-    Identifier(String),
-    Space,
-}
+use crate::clex::token::IntegerToken;
 
 macro_rules! constant {
-    ($x:expr) => {
-        Box::new(|_| $x)
+    ($x: expr) => {
+        Box::new(move |_| $x)
     };
 }
 
-use FloatToken::*;
-use IntegerToken::*;
-use KeywordToken::*;
-use OperatorToken::*;
-use Token::*;
+macro_rules! keyword {
+    ($x:ident) => {
+        (casey::lower!(stringify!($x)), constant!(Some(Keyword($x))))
+    };
+}
 
-pub fn clex() -> lexer::Result<Lexer<Token>> {
-    let v: Vec<(&str, lexer::Action<Token>)> = vec![
-        (r"auto", constant!(Keyword(Auto))),
-        (r"break", constant!(Keyword(Break))),
-        (r"case", constant!(Keyword(Case))),
-        (r"char", constant!(Keyword(Char))),
-        (r"const", constant!(Keyword(Const))),
-        (r"continue", constant!(Keyword(Continue))),
-        (r"default", constant!(Keyword(Default))),
-        (r"do", constant!(Keyword(Do))),
-        (r"double", constant!(Keyword(Double))),
-        (r"else", constant!(Keyword(Else))),
-        (r"enum", constant!(Keyword(Enum))),
-        (r"extern", constant!(Keyword(Extern))),
-        (r"float", constant!(Keyword(Float))),
-        (r"for", constant!(Keyword(For))),
-        (r"goto", constant!(Keyword(Goto))),
-        (r"if", constant!(Keyword(If))),
-        (r"int", constant!(Keyword(Int))),
-        (r"long", constant!(Keyword(Long))),
-        (r"register", constant!(Keyword(Register))),
-        (r"return", constant!(Keyword(Return))),
-        (r"short", constant!(Keyword(Short))),
-        (r"signed", constant!(Keyword(Signed))),
-        (r"sizeof", constant!(Keyword(Sizeof))),
-        (r"static", constant!(Keyword(Static))),
-        (r"struct", constant!(Keyword(Struct))),
-        (r"switch", constant!(Keyword(Switch))),
-        (r"typedef", constant!(Keyword(Typedef))),
-        (r"union", constant!(Keyword(Union))),
-        (r"unsigned", constant!(Keyword(Unsigned))),
-        (r"void", constant!(Keyword(Void))),
-        (r"volatile", constant!(Keyword(Volatile))),
-        (r"while", constant!(Keyword(While))),
-        (r";", constant!(Operator(Semicolon))),
-        (r"\(", constant!(Operator(LParen))),
-        (r"\)", constant!(Operator(RParen))),
-        (r"\[", constant!(Operator(LSqBr))),
-        (r"\]", constant!(Operator(RSqBr))),
-        (r"{", constant!(Operator(LBrace))),
-        (r"}", constant!(Operator(RBrace))),
+fn op(x: OperatorToken) -> lexer::Action<Option<Token>> {
+    constant!(Some(Operator(x)))
+}
+
+pub fn clex() -> lexer::Result<Lexer<Option<Token>>> {
+    let v: Vec<(&str, lexer::Action<Option<Token>>)> = vec![
+        ("//(.)*\n|/\\*(.|\n)*\\*/|(\\s)+", constant!(None)),
+        keyword!(Auto),
+        keyword!(Break),
+        keyword!(Case),
+        keyword!(Char),
+        keyword!(Const),
+        keyword!(Continue),
+        keyword!(Default),
+        keyword!(Do),
+        keyword!(Double),
+        keyword!(Else),
+        keyword!(Enum),
+        keyword!(Extern),
+        keyword!(Float),
+        keyword!(For),
+        keyword!(Goto),
+        keyword!(If),
+        keyword!(Int),
+        keyword!(Long),
+        keyword!(Register),
+        keyword!(Return),
+        keyword!(Short),
+        keyword!(Signed),
+        keyword!(Sizeof),
+        keyword!(Static),
+        keyword!(Struct),
+        keyword!(Switch),
+        keyword!(Typedef),
+        keyword!(Union),
+        keyword!(Unsigned),
+        keyword!(Void),
+        keyword!(Volatile),
+        keyword!(While),
+        (r"\.\.\.", op(Ellipsis)),
+        (r">>=", op(ShrAsn)),
+        (r"<<=", op(ShlAsn)),
+        (r"\+=", op(AddAsn)),
+        (r"-=", op(SubAsn)),
+        (r"\*=", op(MulAsn)),
+        (r"/=", op(DivAsn)),
+        (r"%=", op(ModAsn)),
+        (r"&=", op(AndAsn)),
+        (r"^=", op(XorAsn)),
+        (r"\|=", op(OrAsn)),
+        (r">>", op(Shr)),
+        (r"<<", op(Shl)),
+        (r"\+\+", op(Inc)),
+        (r"--", op(Dec)),
+        (r"->", op(Ptr)),
+        (r"&&", op(And)),
+        (r"\|\|", op(Or)),
+        (r"<=", op(Le)),
+        (r">=", op(Ge)),
+        (r"==", op(Eq)),
+        (r"!=", op(Ne)),
+        (r";", op(Semicolon)),
+        (r"\{|<%", op(LBrace)),
+        (r"\}|>%", op(RBrace)),
+        (r",", op(Comma)),
+        (r":", op(Colon)),
+        (r"=", op(Assign)),
+        (r"\(", op(LParen)),
+        (r"\)", op(RParen)),
+        (r"\[|<:", op(LSqBr)),
+        (r"\]|>:", op(RSqBr)),
+        (r"\.", op(Dot)),
+        (r"&", op(BitAnd)),
+        (r"!", op(Not)),
+        (r"~", op(Tilde)),
+        (r"-", op(Minus)),
+        (r"\+", op(Plus)),
+        (r"\*", op(Ast)),
+        (r"/", op(Div)),
+        (r"%", op(Mod)),
+        (r"<", op(Lt)),
+        (r">", op(Gt)),
+        (r"^", op(Caret)),
+        (r"\|", op(BitOr)),
+        (r"\?", op(QnMk)),
         (
             r"\l(\l|\d)*",
             Box::new(|s| {
-                Identifier(from_utf8(s).expect("identifier").to_owned())
+                Some(Identifier(from_utf8(s).expect("identifier").to_owned()))
             }),
         ),
-        (r"(\s)+", constant!(Space)),
+        (
+            r"(-)?(\d)+([uUlL])*",
+            Box::new(|s| {
+                use IntegerToken::*;
+                let i = s.partition_point(|x| (b'0'..=b'9').contains(x));
+                let (l, r) = s.split_at(i);
+                let t = from_utf8(l).expect("integer");
+                let k: i64 = t.parse().expect("in range");
+                Some(Literal(LInt(match r {
+                    b"" | b"l" => L(k as i32),
+                    b"ll" => LL(k as i64),
+                    b"u" | b"ul" | b"lu" => UL(k as u32),
+                    b"ull" | b"llu" => ULL(k as u64),
+                    _ => todo!(), // wrap in err instead
+                })))
+            }),
+        ),
     ];
     Lexer::new(v.into_iter())
 }
@@ -196,12 +147,24 @@ mod tests {
         let lexer = clex().unwrap();
         let code = r#"
             int main() {
-                return true;
+                return 0;
             }
         "#;
+        let tokens: Vec<Token> =
+            lexer.items(code.as_bytes()).filter_map(|x| x).collect();
         assert_eq!(
-            lexer.items(code.as_bytes()).filter(|x| x != &Space).count(),
-            9
+            tokens,
+            vec![
+                Keyword(Int),
+                Identifier("main".to_string()),
+                Operator(LParen),
+                Operator(RParen),
+                Operator(LBrace),
+                Keyword(Return),
+                Literal(LInt(IntegerToken::L(0))),
+                Operator(Semicolon),
+                Operator(RBrace)
+            ]
         );
     }
 }

@@ -30,6 +30,9 @@ impl IR {
                     .chain(once(b'_'))
                     .map(L)
                     .collect()),
+                MetaCharacter::Dot => {
+                    U((0..=255u8).filter(|&x| x != b'\n').map(L).collect())
+                }
             },
             Char(x) => L(x),
             CCls(v) => U(v.into_iter().map(L).collect()),
@@ -51,7 +54,7 @@ impl IR {
 #[cfg(test)]
 mod tests {
     use crate::automata::dfa::DFA;
-    use crate::automata::nfa::NFA;
+    use crate::automata::nfa::NFABuilder;
     use crate::automata::IR;
     use crate::combinator::Parser;
 
@@ -101,8 +104,7 @@ mod tests {
             ]))),
         ]);
         let ir = IR::new(ast);
-        let mut nfa = NFA::new();
-        nfa.extend_with(&ir);
+        let nfa = NFABuilder::new().ir(&ir).build();
         let dfa = DFA::new(&nfa);
         assert!(dfa.accept("-1.234".as_bytes()));
         assert!(dfa.accept("1234".as_bytes()));

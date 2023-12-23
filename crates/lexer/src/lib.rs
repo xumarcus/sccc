@@ -1,9 +1,9 @@
-use automata::{dfa::DFA, nfa::NFA, Category};
+use automata::{dfa::DFA, nfa::NFABuilder, Category};
 use combinator::Parser;
 use regex::ParseRegexError;
 
-pub mod combinator;
 mod automata;
+pub mod combinator;
 mod regex;
 
 pub type Result<T> = core::result::Result<T, ParseRegexError>;
@@ -18,13 +18,14 @@ impl<T> Lexer<T> {
     pub fn new<'a>(
         iter: impl Iterator<Item = (&'a str, Action<T>)>,
     ) -> Result<Self> {
-        let mut nfa = NFA::new();
+        let mut builder = NFABuilder::new();
         let mut actions = Vec::new();
         for (regex, action) in iter {
             let ir = regex.parse()?;
-            nfa.extend_with(&ir);
+            builder.add_ir(&ir);
             actions.push(action);
         }
+        let nfa = builder.build();
         let dfa = DFA::new(&nfa);
         Ok(Self { dfa, actions })
     }
@@ -35,9 +36,7 @@ impl<T> Parser for Lexer<T> {
     fn run<'a>(&self, s: &'a [u8]) -> Option<(T, &'a [u8])> {
         self.dfa.run(s).map(|(c, t)| {
             let Category(i) = c;
-            let offset = unsafe {
-                t.as_ptr().offset_from(s.as_ptr())
-            } as usize;
+            let offset = unsafe { t.as_ptr().offset_from(s.as_ptr()) } as usize;
             let (r, _) = s.split_at(offset);
             (self.actions[i](r), t)
         })
@@ -48,14 +47,12 @@ impl<T> Parser for Lexer<T> {
 mod tests {
     use std::str::from_utf8;
 
-    use crate::{Lexer, Action, combinator::Parser};
+    use crate::{combinator::Parser, Action, Lexer};
 
     #[test]
     fn lex_multi_simple() {
-        let v: Vec<(&str, Action<usize>)> = vec![
-            (r"a", Box::new(|_| 0)),
-            (r"b", Box::new(|_| 1)),
-        ];
+        let v: Vec<(&str, Action<usize>)> =
+            vec![(r"a", Box::new(|_| 0)), (r"b", Box::new(|_| 1))];
         let lexer = Lexer::new(v.into_iter()).unwrap();
         assert_eq!(lexer.run("a".as_bytes()).unwrap().0, 0);
         assert_eq!(lexer.run("b".as_bytes()).unwrap().0, 1);
@@ -65,7 +62,10 @@ mod tests {
     fn lex_multi() {
         let v: Vec<(&str, Action<isize>)> = vec![
             (r"\d\d\d", Box::new(|_| 42)),
-            (r"(-)?[123456789](\d)+", Box::new(|s| from_utf8(s).unwrap().parse().unwrap())),
+            (
+                r"(-)?[123456789](\d)+",
+                Box::new(|s| from_utf8(s).unwrap().parse().unwrap()),
+            ),
             (r"0(\d)+", Box::new(|_| 1)),
         ];
         let lexer = Lexer::new(v.into_iter()).unwrap();

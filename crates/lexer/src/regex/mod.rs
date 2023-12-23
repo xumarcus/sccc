@@ -7,31 +7,31 @@ use self::parser::ast_regex;
 pub mod ir;
 pub mod parser;
 
-#[derive(Clone, Copy, Debug)]
-pub struct ParseRegexError;
+#[derive(Clone, Debug)]
+pub struct ParseRegexError(String);
 
 impl FromStr for IR {
     type Err = ParseRegexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (ast, t) = ast_regex(10).run(s.as_bytes()).ok_or(ParseRegexError)?;
-        if t.is_empty() {
-            Ok(IR::new(ast))
-        } else {
-            Err(ParseRegexError)
-        }
+        ast_regex(10)
+            .run(s.as_bytes())
+            .and_then(|(ast, t)| Some(IR::new(ast)).filter(|_| t.is_empty()))
+            .ok_or_else(|| ParseRegexError(s.to_owned()))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{automata::{dfa::DFA, nfa::NFA}, combinator::Parser};
     use super::*;
+    use crate::{
+        automata::{dfa::DFA, nfa::NFABuilder},
+        combinator::Parser,
+    };
 
     fn dfa_from_regex(r: &str) -> Result<DFA, ParseRegexError> {
         let ir = r.parse()?;
-        let mut nfa = NFA::new();
-        nfa.extend_with(&ir);
+        let nfa = NFABuilder::new().ir(&ir).build();
         let dfa = DFA::new(&nfa);
         Ok(dfa)
     }
@@ -44,9 +44,17 @@ mod tests {
 
     #[test]
     fn regex_email() {
-        let x = dfa_from_regex(r"(\w)+(.(\w)+)?@(\w)+.(\w)+").unwrap();
+        let x = dfa_from_regex(r"(\w)+(\.(\w)+)?@(\w)+\.(\w)+").unwrap();
         assert!(x.accept("xumarcus.sg@gmail.com".as_bytes()));
         assert!(!x.accept("notan.email@com".as_bytes()));
+    }
+
+    #[ignore] // TODO: improve compilation for dot
+    #[test]
+    fn regex_clex() {
+        let x = dfa_from_regex("//(.)*\n|/\\*(.|\n)*\\*/").unwrap();
+        assert!(x.accept("// a\n".as_bytes()));
+        assert!(x.accept("/* a\nb\n */".as_bytes()));
     }
 
     #[test]

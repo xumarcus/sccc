@@ -5,12 +5,12 @@ use super::{nfa::NFA, util::SIGMA, Category};
 use bit_set::BitSet;
 
 #[derive(Clone, Copy, Debug)]
-struct DFAEntry {
+struct DFANode {
     c: Option<Category>,
     t: [Option<usize>; SIGMA],
 }
 
-impl DFAEntry {
+impl DFANode {
     fn new(nfa: &NFA, s: &BitSet) -> Self {
         Self {
             c: nfa.category(s),
@@ -19,12 +19,12 @@ impl DFAEntry {
     }
 }
 
-pub(crate) struct DFA(Vec<DFAEntry>);
+pub(crate) struct DFA(Vec<DFANode>);
 
 impl DFA {
     fn powerset_construction(nfa: &NFA) -> Self {
         let s = nfa.initial_state();
-        let mut d = vec![DFAEntry::new(nfa, &s)];
+        let mut d = vec![DFANode::new(nfa, &s)];
         let mut v = vec![s.clone()];
 
         // Performance issue with email regex
@@ -39,7 +39,7 @@ impl DFA {
                     d[i].t[x as usize] = match m.get(&u) {
                         None => {
                             let k = v.len();
-                            d.push(DFAEntry::new(nfa, &u));
+                            d.push(DFANode::new(nfa, &u));
                             v.push(u.clone());
                             m.insert(u, k);
                             Some(k)
@@ -100,13 +100,13 @@ impl DFA {
         let mut d = Vec::new();
         for (i, e) in self.0.into_iter().enumerate() {
             if reindex[i].is_ok() {
-                let DFAEntry { c, mut t } = e;
+                let DFANode { c, mut t } = e;
                 for x in t.iter_mut() {
                     if let Some(t) = x {
                         *t = reindex[*t].unwrap_or_else(|z| z);
                     }
                 }
-                d.push(DFAEntry { c, t });
+                d.push(DFANode { c, t });
             }
         }
         DFA(d)
@@ -138,14 +138,18 @@ mod tests {
     use crate::{
         automata::{
             dfa::DFA,
-            nfa::NFA,
+            nfa::NFABuilder,
             IR::{self, *},
         },
         combinator::Parser,
     };
 
-    fn ir_simple() -> IR {
+    fn ir_simple_1() -> IR {
         U(vec![E, C(vec![K(Box::new(L(b'a'))), L(b'b')])])
+    }
+
+    fn ir_simple_2() -> IR {
+        C(vec![L(b'a'), L(b'b'), L(b'c')])
     }
 
     fn ir() -> IR {
@@ -165,10 +169,9 @@ mod tests {
     }
 
     #[test]
-    fn dfa_accept_simple() {
-        let ir = ir_simple();
-        let mut nfa = NFA::new();
-        nfa.extend_with(&ir);
+    fn dfa_accept_simple_1() {
+        let ir = ir_simple_1();
+        let nfa = NFABuilder::new().ir(&ir).build();
         let dfa = DFA::new(&nfa);
         assert_eq!(dfa.0.len(), 3);
         assert!(dfa.accept("".as_bytes()));
@@ -178,10 +181,21 @@ mod tests {
     }
 
     #[test]
+    fn dfa_accept_simple_2() {
+        let ir = ir_simple_2();
+        let nfa = NFABuilder::new().ir(&ir).build();
+        let dfa = DFA::new(&nfa);
+        assert_eq!(dfa.0.len(), 4);
+        assert!(!dfa.accept("".as_bytes()));
+        assert!(dfa.accept("abc".as_bytes()));
+        assert!(!dfa.accept("abcd".as_bytes()));
+        assert!(!dfa.accept("cba".as_bytes()));
+    }
+
+    #[test]
     fn dfa_accept() {
         let ir = ir();
-        let mut nfa = NFA::new();
-        nfa.extend_with(&ir);
+        let nfa = NFABuilder::new().ir(&ir).build();
         let dfa = DFA::new(&nfa);
         assert_eq!(dfa.0.len(), 3);
         for x in 0..20 {
