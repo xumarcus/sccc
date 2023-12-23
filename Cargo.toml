@@ -6,8 +6,10 @@ edition = "2021"
 
 [workspace]
 members = [
+    "crates/cc",
     "crates/lexer",
 ]
 
 [dependencies]
+cc = { path = "crates/cc" }
 lexer = { path = "crates/lexer" }

@@ -7,7 +7,9 @@ pub trait Parser {
     fn accept(&self, s: &[u8]) -> bool {
         matches!(self.run(s), Some((_, [])))
     }
-
+    fn items<'a>(&'a self, s: &'a [u8]) -> Items<'a, Self> where Self: Sized {
+        Items(self, s)
+    }
     fn collect(self) -> Collect<Self>
     where
         Self: Sized,
@@ -84,6 +86,17 @@ impl<P: Parser> Parser for Rc<P>
     type Item = P::Item;
     fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         self.as_ref().run(s)
+    }
+}
+
+pub struct Items<'a, P: Parser>(&'a P, &'a [u8]);
+impl<'a, P: Parser> Iterator for Items<'a, P> {
+    type Item = P::Item;
+    fn next(&mut self) -> Option<Self::Item> {
+        let Items(p, s) = self;
+        let (x, t) = p.run(s)?;
+        *s = t;
+        Some(x)
     }
 }
 

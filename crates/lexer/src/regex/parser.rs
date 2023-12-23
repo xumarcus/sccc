@@ -1,8 +1,15 @@
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MetaCharacter {
+    D,
+    H,
+    L,
+    S,
+    W,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum AST {
-    DChr,
-    WChr,
-    SChr,
+pub enum AST {
+    Meta(MetaCharacter),
     Char(u8),
     CCls(Vec<u8>),
     Conc(Vec<AST>),
@@ -11,16 +18,24 @@ pub(crate) enum AST {
     Plus(Box<AST>),
     QnMk(Box<AST>),
 }
-use AST::*;
+
 use crate::combinator::*;
+use MetaCharacter::*;
+use AST::*;
 
 fn ast_dws() -> impl Parser<Item = AST> {
-    satisfy(b'\\').then(PChar.filter_map(|x| match x {
-        b'd' => Some(DChr),
-        b'w' => Some(WChr),
-        b's' => Some(SChr),
-        _ => None,
-    }))
+    satisfy(b'\\').then(
+        PChar
+            .filter_map(|x| match x {
+                b'd' => Some(D),
+                b'h' => Some(H),
+                b'l' => Some(L),
+                b's' => Some(S),
+                b'w' => Some(W),
+                _ => None,
+            })
+            .map(Meta),
+    )
 }
 
 const ESCAPED: [u8; 9] =
@@ -86,46 +101,43 @@ mod tests {
     #[test]
     fn pat_dws() {
         let pattern = r"\d".as_bytes();
-        assert_eq!(ast_dws().run(pattern), Some((DChr, &[] as &[u8])))
+        assert!(ast_dws().accept(pattern));
     }
 
     #[test]
     fn pat_ccls() {
         let pattern = r"[a\[\]c]".as_bytes();
-        assert_eq!(
-            ast_ccls().run(pattern),
-            Some((CCls(vec![b'a', b'[', b']', b'c']), &[] as &[u8]))
-        )
+        assert!(ast_ccls().accept(pattern));
     }
 
     #[test]
     fn pat_atom_char() {
         let pattern = r"a".as_bytes();
-        assert!(matches!(ast_atom(0).run(pattern), Some((Char(_), _))))
+        assert!(ast_atom(0).accept(pattern));
     }
 
     #[test]
     fn pat_atom_spq() {
         let pattern = r"(a)?".as_bytes();
-        assert!(matches!(ast_atom(1).run(pattern), Some((QnMk(_), _))))
+        assert!(ast_atom(1).accept(pattern));
     }
 
     #[test]
     fn pat_atom_bad_char() {
         let pattern = r"*".as_bytes();
-        assert_eq!(ast_atom(1).run(pattern), None);
+        assert!(!ast_atom(1).accept(pattern));
     }
 
     #[test]
     fn pat_char() {
         let pattern = r"a".as_bytes();
-        assert!(matches!(ast_regex(0).run(pattern), Some((Char(_), _))))
+        assert!(ast_regex(0).accept(pattern));
     }
 
     #[test]
     fn pat_no_bracket() {
         let pattern = r"\w?".as_bytes();
-        assert!(matches!(ast_regex(1).run(pattern), Some((WChr, [b'?']))));
+        assert!(matches!(ast_regex(1).run(pattern), Some((Meta(MetaCharacter::W), [b'?']))));
     }
 
     #[test]
@@ -143,30 +155,30 @@ mod tests {
     #[test]
     fn pat_altr_conc() {
         let pattern = r"a|bc".as_bytes();
-        assert!(matches!(ast_regex(1).run(pattern), Some((_, []))));
+        assert!(ast_regex(1).accept(pattern));
     }
 
     #[test]
     fn pat_1() {
         let pattern = r"a|(b)?".as_bytes();
-        assert!(matches!(ast_regex(5).run(pattern), Some((_, []))));
+        assert!(ast_regex(3).accept(pattern));
     }
 
     #[test]
     fn pat_2() {
         let pattern = r"(b)?c".as_bytes();
-        assert!(matches!(ast_regex(5).run(pattern), Some((_, []))));
+        assert!(ast_regex(3).accept(pattern));
     }
 
     #[test]
     fn pat_3() {
         let pattern = r"a|bc".as_bytes();
-        assert!(matches!(ast_regex(5).run(pattern), Some((_, []))));
+        assert!(ast_regex(3).accept(pattern));
     }
 
     #[test]
     fn pat_4() {
         let pattern = r"a|(b(cd)*)?e".as_bytes();
-        assert!(matches!(ast_regex(5).run(pattern), Some((_, []))));
+        assert!(ast_regex(3).accept(pattern));
     }
 }

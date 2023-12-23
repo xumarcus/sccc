@@ -2,19 +2,22 @@ use automata::{dfa::DFA, nfa::NFA, Category};
 use combinator::Parser;
 use regex::ParseRegexError;
 
+pub mod combinator;
 mod automata;
-mod combinator;
 mod regex;
+
+pub type Result<T> = core::result::Result<T, ParseRegexError>;
+pub type Action<T> = Box<dyn Fn(&[u8]) -> T>;
 
 pub struct Lexer<T> {
     dfa: DFA,
-    actions: Vec<Box<dyn Fn(&[u8]) -> T>>,
+    actions: Vec<Action<T>>,
 }
 
 impl<T> Lexer<T> {
     pub fn new<'a>(
-        iter: impl Iterator<Item = (&'a str, Box<dyn Fn(&[u8]) -> T>)>,
-    ) -> Result<Self, ParseRegexError> {
+        iter: impl Iterator<Item = (&'a str, Action<T>)>,
+    ) -> Result<Self> {
         let mut nfa = NFA::new();
         let mut actions = Vec::new();
         for (regex, action) in iter {
@@ -25,8 +28,11 @@ impl<T> Lexer<T> {
         let dfa = DFA::new(&nfa);
         Ok(Self { dfa, actions })
     }
+}
 
-    pub fn lex<'a>(&self, s: &'a [u8]) -> Option<(T, &'a [u8])> {
+impl<T> Parser for Lexer<T> {
+    type Item = T;
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(T, &'a [u8])> {
         self.dfa.run(s).map(|(c, t)| {
             let Category(i) = c;
             let offset = unsafe {
@@ -42,31 +48,34 @@ impl<T> Lexer<T> {
 mod tests {
     use std::str::from_utf8;
 
-    use crate::Lexer;
+    use crate::{Lexer, Action, combinator::Parser};
 
     #[test]
     fn lex_multi_simple() {
-        let v: Vec<(&str, Box<dyn Fn(&[u8]) -> usize>)> = vec![
+        let v: Vec<(&str, Action<usize>)> = vec![
             (r"a", Box::new(|_| 0)),
             (r"b", Box::new(|_| 1)),
         ];
         let lexer = Lexer::new(v.into_iter()).unwrap();
-        assert_eq!(lexer.lex("a".as_bytes()).unwrap().0, 0);
-        assert_eq!(lexer.lex("b".as_bytes()).unwrap().0, 1);
+        assert_eq!(lexer.run("a".as_bytes()).unwrap().0, 0);
+        assert_eq!(lexer.run("b".as_bytes()).unwrap().0, 1);
     }
 
     #[test]
     fn lex_multi() {
-        let v: Vec<(&str, Box<dyn Fn(&[u8]) -> isize>)> = vec![
+        let v: Vec<(&str, Action<isize>)> = vec![
             (r"\d\d\d", Box::new(|_| 42)),
             (r"(-)?[123456789](\d)+", Box::new(|s| from_utf8(s).unwrap().parse().unwrap())),
             (r"0(\d)+", Box::new(|_| 1)),
         ];
         let lexer = Lexer::new(v.into_iter()).unwrap();
-        assert_eq!(lexer.lex("123".as_bytes()).unwrap().0, 42);
-        assert_eq!(lexer.lex("1234".as_bytes()).unwrap().0, 1234);
-        assert_eq!(lexer.lex("-123".as_bytes()).unwrap().0, -123);
-        assert_eq!(lexer.lex("0456".as_bytes()).unwrap().0, 1);
-        
+        assert_eq!(lexer.run("123".as_bytes()).unwrap().0, 42);
+        assert_eq!(lexer.run("1234".as_bytes()).unwrap().0, 1234);
+        assert_eq!(lexer.run("-123".as_bytes()).unwrap().0, -123);
+        assert_eq!(lexer.run("0456".as_bytes()).unwrap().0, 1);
+        assert_eq!(lexer.run("123a".as_bytes()).unwrap().1[0], b'a');
+        assert_eq!(lexer.run("1234a".as_bytes()).unwrap().1[0], b'a');
+        assert_eq!(lexer.run("-123a".as_bytes()).unwrap().1[0], b'a');
+        assert_eq!(lexer.run("0456a".as_bytes()).unwrap().1[0], b'a');
     }
 }

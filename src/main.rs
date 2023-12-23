@@ -1,3 +1,4 @@
+use cc;
 use lexer;
 
 fn main() {
