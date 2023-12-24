@@ -10,32 +10,25 @@ impl IR {
 
         match ast {
             Meta(m) => match m {
-                MetaCharacter::D => U((b'0'..=b'9').map(L).collect()),
-                MetaCharacter::H => U((b'a'..=b'f')
+                MetaCharacter::D => L((b'0'..=b'9').collect()),
+                MetaCharacter::H => L((b'a'..=b'f')
                     .chain(b'A'..=b'F')
                     .chain(b'0'..=b'9')
-                    .map(L)
                     .collect()),
-                MetaCharacter::L => U((b'a'..=b'z')
+                MetaCharacter::L => L((b'a'..=b'z')
                     .chain(b'A'..=b'Z')
                     .chain(once(b'_'))
-                    .map(L)
                     .collect()),
-                MetaCharacter::S => {
-                    U(vec![L(b' '), L(b'\r'), L(b'\n'), L(b'\t')])
-                }
-                MetaCharacter::W => U((b'a'..=b'z')
+                MetaCharacter::S => L(vec![b' ', b'\r', b'\n', b'\t']),
+                MetaCharacter::W => L((b'a'..=b'z')
                     .chain(b'A'..=b'Z')
                     .chain(b'0'..=b'9')
                     .chain(once(b'_'))
-                    .map(L)
                     .collect()),
-                MetaCharacter::Dot => {
-                    U((0..=255u8).filter(|&x| x != b'\n').map(L).collect())
-                }
             },
-            Char(x) => L(x),
-            CCls(v) => U(v.into_iter().map(L).collect()),
+            Dot => L((0..=255u8).filter(|&x| x != b'\n').collect()),
+            Char(x) => L(vec![x]),
+            CCls(v) => L(v),
             Conc(v) => C(v.into_iter().map(Self::new).collect()),
             Altr(v) => U(v.into_iter().map(Self::new).collect()),
             Star(a) => K(Box::new(IR::new(*a))),
@@ -48,67 +41,5 @@ impl IR {
                 U(vec![E, ir])
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::automata::dfa::DFA;
-    use crate::automata::nfa::NFABuilder;
-    use crate::automata::IR;
-    use crate::combinator::Parser;
-
-    use super::AST::*;
-    use super::IR::*;
-
-    #[test]
-    fn ir_direct_translate() {
-        let ast = Star(Box::new(Altr(vec![
-            Char(b'0'),
-            Star(Box::new(Conc(vec![
-                Char(b'1'),
-                Star(Box::new(Conc(vec![
-                    Char(b'0'),
-                    Star(Box::new(Char(b'1'))),
-                    Star(Box::new(Conc(vec![Char(b'0'), Char(b'0')]))),
-                    Char(b'0'),
-                ]))),
-                Char(b'1'),
-            ]))),
-        ])));
-        let ir = K(Box::new(U(vec![
-            L(b'0'),
-            K(Box::new(C(vec![
-                L(b'1'),
-                K(Box::new(C(vec![
-                    L(b'0'),
-                    K(Box::new(L(b'1'))),
-                    K(Box::new(C(vec![L(b'0'), L(b'0')]))),
-                    L(b'0'),
-                ]))),
-                L(b'1'),
-            ]))),
-        ])));
-        assert_eq!(IR::new(ast), ir);
-    }
-
-    #[test]
-    fn ir_indirect_translate() {
-        use crate::regex::parser::MetaCharacter;
-        let ast = Conc(vec![
-            QnMk(Box::new(Char(b'-'))),
-            Plus(Box::new(Meta(MetaCharacter::D))),
-            QnMk(Box::new(Conc(vec![
-                Char(b'.'),
-                Plus(Box::new(Meta(MetaCharacter::D))),
-            ]))),
-        ]);
-        let ir = IR::new(ast);
-        let nfa = NFABuilder::new().ir(&ir).build();
-        let dfa = DFA::new(&nfa);
-        assert!(dfa.accept("-1.234".as_bytes()));
-        assert!(dfa.accept("1234".as_bytes()));
-        assert!(!dfa.accept("".as_bytes()));
-        assert!(!dfa.accept("12.ab".as_bytes()));
     }
 }

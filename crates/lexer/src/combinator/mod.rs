@@ -1,5 +1,7 @@
 use std::{iter::successors, rc::Rc};
 
+mod ptrs;
+
 pub trait Parser {
     type Item;
     fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])>;
@@ -7,7 +9,10 @@ pub trait Parser {
     fn accept(&self, s: &[u8]) -> bool {
         matches!(self.run(s), Some((_, [])))
     }
-    fn items<'a>(&'a self, s: &'a [u8]) -> Items<'a, Self> where Self: Sized {
+    fn items<'a>(&'a self, s: &'a [u8]) -> Items<'a, Self>
+    where
+        Self: Sized,
+    {
         Items(self, s)
     }
     fn collect(self) -> Collect<Self>
@@ -28,10 +33,7 @@ pub trait Parser {
     {
         Or(self, other)
     }
-    fn bind<Q: Parser, F: Fn(Self::Item) -> Q>(
-        self,
-        f: F,
-    ) -> Bind<Self, Q, F>
+    fn bind<Q: Parser, F: Fn(Self::Item) -> Q>(self, f: F) -> Bind<Self, Q, F>
     where
         Self: Sized,
     {
@@ -72,23 +74,6 @@ pub trait Parser {
     }
 }
 
-// macro?
-impl<T> Parser for Box<dyn Parser<Item = T>>
-{
-    type Item = T;
-    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
-        self.as_ref().run(s)
-    }
-}
-
-impl<P: Parser> Parser for Rc<P>
-{
-    type Item = P::Item;
-    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
-        self.as_ref().run(s)
-    }
-}
-
 pub struct Items<'a, P: Parser>(&'a P, &'a [u8]);
 impl<'a, P: Parser> Iterator for Items<'a, P> {
     type Item = P::Item;
@@ -99,14 +84,10 @@ impl<'a, P: Parser> Iterator for Items<'a, P> {
         Some(x)
     }
 }
-
 pub struct Collect<P: Parser>(P);
 impl<P: Parser> Parser for Collect<P> {
     type Item = Vec<P::Item>;
-    fn run<'a>(
-        &self,
-        s: &'a [u8],
-    ) -> Option<(Self::Item, &'a [u8])> {
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (v, mut t): (Self::Item, Vec<&'a [u8]>) =
             successors(self.0.run(s), |(_, t)| self.0.run(t)).unzip();
         Some((v, t.pop().unwrap_or(s)))
@@ -185,8 +166,8 @@ impl<P: Parser, T, F: Fn(P::Item) -> Option<T>> Parser for FilterMap<P, T, F> {
     }
 }
 
-pub struct PChar;
-impl Parser for PChar {
+pub struct ParserChar;
+impl Parser for ParserChar {
     type Item = u8;
     fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (h, t) = s.split_first()?;
@@ -195,14 +176,10 @@ impl Parser for PChar {
 }
 
 pub fn satisfy(a: u8) -> impl Parser<Item = ()> {
-    PChar.filter_map(move |x| if x == a { Some(()) } else { None })
+    ParserChar.filter_map(move |x| if x == a { Some(()) } else { None })
 }
 
-pub fn between<P: Parser>(
-    p: P,
-    op: u8,
-    cl: u8,
-) -> impl Parser<Item = P::Item> {
+pub fn between<P: Parser>(p: P, op: u8, cl: u8) -> impl Parser<Item = P::Item> {
     satisfy(op).then(p).skip(satisfy(cl))
 }
 
@@ -225,28 +202,28 @@ mod tests {
     #[test]
     fn combinator_between_1() {
         let s = r"[a]".as_bytes();
-        let p = between(PChar, b'[', b']');
+        let p = between(ParserChar, b'[', b']');
         assert_eq!(p.run(s), Some((b'a', &[] as &[u8])));
     }
 
     #[test]
     fn combinator_between_2() {
         let s = r"[ab]".as_bytes();
-        let p = between(PChar, b'[', b']');
+        let p = between(ParserChar, b'[', b']');
         assert_eq!(p.run(s), None);
     }
 
     #[test]
     fn combinator_intersperse_1() {
         let s = r"a".as_bytes();
-        let p = intersperse(PChar, b',');
+        let p = intersperse(ParserChar, b',');
         assert_eq!(p.run(s), Some((vec![b'a'], &[] as &[u8])));
     }
 
     #[test]
     fn combinator_intersperse_2() {
         let s = r"a,b,c".as_bytes();
-        let p = intersperse(PChar, b',');
+        let p = intersperse(ParserChar, b',');
         assert_eq!(p.run(s), Some((vec![b'a', b'b', b'c'], &[] as &[u8])));
     }
 }

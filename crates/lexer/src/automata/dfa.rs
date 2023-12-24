@@ -139,31 +139,31 @@ mod tests {
         automata::{
             dfa::DFA,
             nfa::NFABuilder,
-            IR::{self, *},
+            IR::{self, *}, ParserAutomaton,
         },
         combinator::Parser,
     };
 
     fn ir_simple_1() -> IR {
-        U(vec![E, C(vec![K(Box::new(L(b'a'))), L(b'b')])])
+        U(vec![E, C(vec![K(Box::new(L(vec![b'a']))), L(vec![b'b'])])])
     }
 
     fn ir_simple_2() -> IR {
-        C(vec![L(b'a'), L(b'b'), L(b'c')])
+        C(vec![L(vec![b'a']), L(vec![b'b']), L(vec![b'c'])])
     }
 
     fn ir() -> IR {
         K(Box::new(U(vec![
-            L(b'0'),
+            L(vec![b'0']),
             K(Box::new(C(vec![
-                L(b'1'),
+                L(vec![b'1']),
                 K(Box::new(C(vec![
-                    L(b'0'),
-                    K(Box::new(L(b'1'))),
-                    K(Box::new(C(vec![L(b'0'), L(b'0')]))),
-                    L(b'0'),
+                    L(vec![b'0']),
+                    K(Box::new(L(vec![b'1']))),
+                    K(Box::new(C(vec![L(vec![b'0']), L(vec![b'1'])]))),
+                    L(vec![b'0']),
                 ]))),
-                L(b'1'),
+                L(vec![b'1']),
             ]))),
         ])))
     }
@@ -174,10 +174,11 @@ mod tests {
         let nfa = NFABuilder::new().ir(&ir).build();
         let dfa = DFA::new(&nfa);
         assert_eq!(dfa.0.len(), 3);
-        assert!(dfa.accept("".as_bytes()));
-        assert!(dfa.accept("aaab".as_bytes()));
-        assert!(!dfa.accept("c".as_bytes()));
-        assert!(!dfa.accept("abab".as_bytes()));
+        let p = ParserAutomaton(dfa);
+        assert!(p.accept("".as_bytes()));
+        assert!(p.accept("aaab".as_bytes()));
+        assert!(!p.accept("c".as_bytes()));
+        assert!(!p.accept("abab".as_bytes()));
     }
 
     #[test]
@@ -186,10 +187,11 @@ mod tests {
         let nfa = NFABuilder::new().ir(&ir).build();
         let dfa = DFA::new(&nfa);
         assert_eq!(dfa.0.len(), 4);
-        assert!(!dfa.accept("".as_bytes()));
-        assert!(dfa.accept("abc".as_bytes()));
-        assert!(!dfa.accept("abcd".as_bytes()));
-        assert!(!dfa.accept("cba".as_bytes()));
+        let p = ParserAutomaton(dfa);
+        assert!(!p.accept("".as_bytes()));
+        assert!(p.accept("abc".as_bytes()));
+        assert!(!p.accept("abcd".as_bytes()));
+        assert!(!p.accept("cba".as_bytes()));
     }
 
     #[test]
@@ -198,9 +200,10 @@ mod tests {
         let nfa = NFABuilder::new().ir(&ir).build();
         let dfa = DFA::new(&nfa);
         assert_eq!(dfa.0.len(), 3);
+        let p = ParserAutomaton(dfa);
         for x in 0..20 {
             let s = format!("{:b}", x);
-            assert_eq!(dfa.accept(s.as_bytes()), x % 3 == 0, "s: {}", s);
+            assert_eq!(p.accept(s.as_bytes()), x % 3 == 0, "s: {}", s);
         }
     }
 }

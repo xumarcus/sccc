@@ -95,10 +95,11 @@ impl NFABuilder {
                 self.nodes[q].epsilon.insert(f);
                 f
             }
-            L(x) => {
+            L(v) => {
                 let f = self.add_state();
-                let a = *x as usize;
-                self.nodes[q].t[a].insert(f);
+                for &x in v {
+                    self.nodes[q].t[x as usize].insert(f);
+                }
                 f
             }
             U(v) => {
@@ -110,11 +111,11 @@ impl NFABuilder {
                         self.thompson(x, s)
                     })
                     .collect();
-                let ff = self.add_state();
+                let g = self.add_state();
                 for f in fs {
-                    self.nodes[f].epsilon.insert(ff);
+                    self.nodes[f].epsilon.insert(g);
                 }
-                ff
+                g
             }
             C(v) => {
                 for x in v {
@@ -124,13 +125,13 @@ impl NFABuilder {
             }
             K(x) => {
                 let s = self.add_state();
-                let f = self.thompson(x, s);
-                let ff = self.add_state();
+                let f  = self.thompson(x, s);
+                let g = self.add_state();
                 self.nodes[q].epsilon.insert(s);
-                self.nodes[q].epsilon.insert(ff);
+                self.nodes[q].epsilon.insert(g);
                 self.nodes[f].epsilon.insert(s);
-                self.nodes[f].epsilon.insert(ff);
-                ff
+                self.nodes[f].epsilon.insert(g);
+                g
             }
         }
     }
@@ -165,28 +166,29 @@ impl Automaton for NFA {
 mod tests {
     use super::IR::*;
     use super::*;
+    use crate::automata::ParserAutomaton;
     use crate::combinator::Parser;
 
     fn ir_simple_1() -> IR {
-        U(vec![E, C(vec![K(Box::new(L(b'a'))), L(b'b')])])
+        U(vec![E, C(vec![K(Box::new(L(vec![b'a']))), L(vec![b'b'])])])
     }
 
     fn ir_simple_2() -> IR {
-        C(vec![L(b'a'), L(b'b'), L(b'c')])
+        C(vec![L(vec![b'a']), L(vec![b'b']), L(vec![b'c'])])
     }
 
     fn ir() -> IR {
         K(Box::new(U(vec![
-            L(b'0'),
+            L(vec![b'0']),
             K(Box::new(C(vec![
-                L(b'1'),
+                L(vec![b'1']),
                 K(Box::new(C(vec![
-                    L(b'0'),
-                    K(Box::new(L(b'1'))),
-                    K(Box::new(C(vec![L(b'0'), L(b'0')]))),
-                    L(b'0'),
+                    L(vec![b'0']),
+                    K(Box::new(L(vec![b'1']))),
+                    K(Box::new(C(vec![L(vec![b'0']), L(vec![b'1'])]))),
+                    L(vec![b'0']),
                 ]))),
-                L(b'1'),
+                L(vec![b'1']),
             ]))),
         ])))
     }
@@ -195,29 +197,32 @@ mod tests {
     fn nfa_accept_simple_1() {
         let ir = ir_simple_1();
         let nfa = NFABuilder::new().ir(&ir).build();
-        assert!(nfa.accept("".as_bytes()));
-        assert!(nfa.accept("aaab".as_bytes()));
-        assert!(!nfa.accept("c".as_bytes()));
-        assert!(!nfa.accept("abab".as_bytes()));
+        let p = ParserAutomaton(nfa);
+        assert!(p.accept("".as_bytes()));
+        assert!(p.accept("aaab".as_bytes()));
+        assert!(!p.accept("c".as_bytes()));
+        assert!(!p.accept("abab".as_bytes()));
     }
 
     #[test]
     fn nfa_accept_simple_2() {
         let ir = ir_simple_2();
         let nfa = NFABuilder::new().ir(&ir).build();
-        assert!(!nfa.accept("".as_bytes()));
-        assert!(nfa.accept("abc".as_bytes()));
-        assert!(!nfa.accept("abcd".as_bytes()));
-        assert!(!nfa.accept("cba".as_bytes()));
+        let p = ParserAutomaton(nfa);
+        assert!(!p.accept("".as_bytes()));
+        assert!(p.accept("abc".as_bytes()));
+        assert!(!p.accept("abcd".as_bytes()));
+        assert!(!p.accept("cba".as_bytes()));
     }
 
     #[test]
     fn nfa_accept() {
         let ir = ir();
         let nfa = NFABuilder::new().ir(&ir).build();
+        let p = ParserAutomaton(nfa);
         for x in 0..20 {
             let s = format!("{:b}", x);
-            assert_eq!(nfa.accept(s.as_bytes()), x % 3 == 0);
+            assert_eq!(p.accept(s.as_bytes()), x % 3 == 0);
         }
     }
 }

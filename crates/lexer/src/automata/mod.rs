@@ -10,7 +10,7 @@ pub struct Category(pub usize);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum IR {
     E,
-    L(u8),
+    L(Vec<u8>),
     U(Vec<IR>),
     C(Vec<IR>),
     K(Box<IR>),
@@ -33,15 +33,17 @@ pub trait Automaton {
     }
 }
 
-impl<T: Automaton> Parser for T {
+pub struct ParserAutomaton<T: Automaton>(pub T);
+
+impl<T: Automaton> Parser for ParserAutomaton<T> {
     type Item = Category;
 
     fn run<'a>(&self, mut s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
-        let mut q = self.initial_state();
-        let mut r = self.category(&q).map(|c| (c, s));
-        while let Some((z, t)) = self.transition_on(&q, s) {
+        let mut q = self.0.initial_state();
+        let mut r = self.0.category(&q).map(|c| (c, s));
+        while let Some((z, t)) = self.0.transition_on(&q, s) {
             q = z;
-            r = self.category(&q).map(|c| (c, t));
+            r = self.0.category(&q).map(|c| (c, t));
             s = t;
         }
         r

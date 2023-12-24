@@ -1,4 +1,4 @@
-use automata::{dfa::DFA, nfa::NFABuilder, Category};
+use automata::{dfa::DFA, nfa::NFABuilder, Category, ParserAutomaton};
 use combinator::Parser;
 use regex::ParseRegexError;
 
@@ -10,7 +10,7 @@ pub type Result<T> = core::result::Result<T, ParseRegexError>;
 pub type Action<T> = Box<dyn Fn(&[u8]) -> T>;
 
 pub struct Lexer<T> {
-    dfa: DFA,
+    parser: ParserAutomaton<DFA>,
     actions: Vec<Action<T>>,
 }
 
@@ -27,14 +27,15 @@ impl<T> Lexer<T> {
         }
         let nfa = builder.build();
         let dfa = DFA::new(&nfa);
-        Ok(Self { dfa, actions })
+        let parser = ParserAutomaton(dfa);
+        Ok(Self { parser, actions })
     }
 }
 
 impl<T> Parser for Lexer<T> {
     type Item = T;
     fn run<'a>(&self, s: &'a [u8]) -> Option<(T, &'a [u8])> {
-        self.dfa.run(s).map(|(c, t)| {
+        self.parser.run(s).map(|(c, t)| {
             let Category(i) = c;
             let offset = unsafe { t.as_ptr().offset_from(s.as_ptr()) } as usize;
             let (r, _) = s.split_at(offset);
