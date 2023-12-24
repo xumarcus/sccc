@@ -36,31 +36,31 @@ impl Debug for NFANode {
     }
 }
 
-pub struct NFABuilder {
+pub(crate) struct NFABuilder {
     nodes: Vec<NFANode>,
     fs: BitSet,
 }
 
 impl NFABuilder {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             nodes: vec![NFANode::default()],
             fs: BitSet::new(),
         }
     }
 
-    pub fn ir(mut self, ir: &IR) -> Self {
+    pub(crate) fn ir(mut self, ir: &IR) -> Self {
         self.add_ir(ir);
         self
     }
 
-    pub fn add_ir(&mut self, ir: &IR) {
+    pub(crate) fn add_ir(&mut self, ir: &IR) {
         let f = self.thompson(ir, 0);
         self.fs.insert(f);
     }
 
     // complete epsilon closure for NFA instance
-    pub fn build(self) -> NFA {
+    pub(crate) fn build(self) -> NFA {
         let Self { mut nodes, fs } = self;
         let n = nodes.len();
         let mut mark = vec![true; n];
@@ -138,7 +138,7 @@ impl NFABuilder {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct NFA {
+pub(crate) struct NFA {
     nodes: Vec<NFANode>,
     fs: BitSet,
 }

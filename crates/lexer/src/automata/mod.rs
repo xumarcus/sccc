@@ -1,11 +1,11 @@
 use super::combinator::Parser;
 
-pub mod dfa;
-pub mod nfa;
+pub(super) mod dfa;
+pub(super) mod nfa;
 mod util;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Category(pub usize);
+pub(crate) struct Category(pub(crate) usize);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum IR {
@@ -16,7 +16,7 @@ pub(crate) enum IR {
     K(Box<IR>),
 }
 
-pub trait Automaton {
+pub(crate) trait Automaton {
     type State;
     fn initial_state(&self) -> Self::State;
     fn transition(&self, q: &Self::State, x: u8) -> Option<Self::State>;
@@ -33,7 +33,7 @@ pub trait Automaton {
     }
 }
 
-pub struct ParserAutomaton<T: Automaton>(pub T);
+pub(crate) struct ParserAutomaton<T: Automaton>(pub(crate) T);
 
 impl<T: Automaton> Parser for ParserAutomaton<T> {
     type Item = Category;

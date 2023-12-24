@@ -1,36 +1,15 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MetaCharacter {
-    D,
-    H,
-    L,
-    S,
-    W,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum AST {
-    Dot,
-    Meta(MetaCharacter),
-    Char(u8),
-    CCls(Vec<u8>),
-    Conc(Vec<AST>),
-    Altr(Vec<AST>),
-    Star(Box<AST>),
-    Plus(Box<AST>),
-    QnMk(Box<AST>),
-}
-
 use std::rc::{Rc, Weak};
 
 use crate::combinator::*;
-use MetaCharacter::*;
-use AST::*;
+
+use super::ast::{AST::{*, self}, MetaCharacter};
 
 const ESCAPED: [u8; 12] = [
     b'.', b'*', b'+', b'?', b'|', b'(', b')', b'[', b']', b'{', b'}', b'\\',
 ];
 
 fn ast_escaped() -> impl Parser<Item = AST> {
+    use MetaCharacter::*;
     satisfy(b'\\').then(
         ParserChar
             .filter_map(|x| match x {

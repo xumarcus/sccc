@@ -1,11 +1,12 @@
 use automata::{dfa::DFA, nfa::NFABuilder, Category, ParserAutomaton};
 use combinator::Parser;
-use regex::ParseRegexError;
 
 mod automata;
 pub mod combinator;
 mod regex;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParseRegexError(pub String);
 pub type Result<T> = core::result::Result<T, ParseRegexError>;
 pub type Action<T> = Box<dyn Fn(&[u8]) -> T>;
 

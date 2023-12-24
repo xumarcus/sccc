@@ -1,10 +1,31 @@
 use std::iter::once;
 
-use super::parser::AST;
-use crate::{automata::IR, regex::parser::MetaCharacter};
+use crate::automata::IR;
 
-impl IR {
-    pub fn new(ast: AST) -> Self {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MetaCharacter {
+    D,
+    H,
+    L,
+    S,
+    W,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum AST {
+    Dot,
+    Meta(MetaCharacter),
+    Char(u8),
+    CCls(Vec<u8>),
+    Conc(Vec<AST>),
+    Altr(Vec<AST>),
+    Star(Box<AST>),
+    Plus(Box<AST>),
+    QnMk(Box<AST>),
+}
+
+impl From<AST> for IR {
+    fn from(ast: AST) -> Self {
         use AST::*;
         use IR::*;
 
@@ -29,15 +50,15 @@ impl IR {
             Dot => L((0..=255u8).filter(|&x| x != b'\n').collect()),
             Char(x) => L(vec![x]),
             CCls(v) => L(v),
-            Conc(v) => C(v.into_iter().map(Self::new).collect()),
-            Altr(v) => U(v.into_iter().map(Self::new).collect()),
-            Star(a) => K(Box::new(IR::new(*a))),
+            Conc(v) => C(v.into_iter().map(Self::from).collect()),
+            Altr(v) => U(v.into_iter().map(Self::from).collect()),
+            Star(a) => K(Box::new(Self::from(*a))),
             Plus(a) => {
-                let ir = IR::new(*a);
+                let ir = Self::from(*a);
                 C(vec![ir.clone(), K(Box::new(ir))])
             }
             QnMk(a) => {
-                let ir = IR::new(*a);
+                let ir = Self::from(*a);
                 U(vec![E, ir])
             }
         }

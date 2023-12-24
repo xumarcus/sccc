@@ -112,7 +112,7 @@ impl DFA {
         DFA(d)
     }
 
-    pub fn new(nfa: &NFA) -> Self {
+    pub(crate) fn new(nfa: &NFA) -> Self {
         Self::myhill_nerode(Self::powerset_construction(nfa))
     }
 }

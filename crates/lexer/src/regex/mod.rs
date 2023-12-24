@@ -1,14 +1,9 @@
+use self::parser::ast_regex;
+use crate::{automata::IR, combinator::Parser, ParseRegexError};
 use std::str::FromStr;
 
-use crate::{automata::IR, combinator::Parser};
-
-use self::parser::ast_regex;
-
-pub mod ir;
-pub mod parser;
-
-#[derive(Clone, Debug)]
-pub struct ParseRegexError(String);
+mod ast;
+mod parser;
 
 impl FromStr for IR {
     type Err = ParseRegexError;
@@ -16,7 +11,7 @@ impl FromStr for IR {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         ast_regex()
             .run(s.as_bytes())
-            .and_then(|(ast, t)| Some(IR::new(ast)).filter(|_| t.is_empty()))
+            .and_then(|(ast, t)| Some(IR::from(ast)).filter(|_| t.is_empty()))
             .ok_or_else(|| ParseRegexError(s.to_owned()))
     }
 }

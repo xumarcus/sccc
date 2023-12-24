@@ -1,6 +1,6 @@
 use std::mem::MaybeUninit;
 
-pub const SIGMA: usize = 256;
+pub(crate) const SIGMA: usize = 256;
 
 pub(crate) fn initialize<T>(f: impl Fn() -> T) -> [T; SIGMA] {
     unsafe {
