@@ -41,7 +41,7 @@ mod tests {
 
     #[test]
     fn regex_email() {
-        let x = parser_from_regex(r"(\w)+(\.(\w)+)?@(\w|-)+\.(\w)+").unwrap();
+        let x = parser_from_regex(r"(\w)+(\.(\w)+)?@(\w|\-)+\.(\w)+").unwrap();
         assert!(x.accept("xumarcus.sg@gmail.com".as_bytes()));
         assert!(x.accept("email123@example-one.com".as_bytes()));
         assert!(!x.accept("notan.email@com".as_bytes()));

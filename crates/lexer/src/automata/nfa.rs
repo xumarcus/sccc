@@ -185,7 +185,7 @@ mod tests {
                 K(Box::new(C(vec![
                     L(vec![b'0']),
                     K(Box::new(L(vec![b'1']))),
-                    K(Box::new(C(vec![L(vec![b'0']), L(vec![b'1'])]))),
+                    K(Box::new(C(vec![L(vec![b'0']), L(vec![b'0'])]))),
                     L(vec![b'0']),
                 ]))),
                 L(vec![b'1']),
@@ -220,7 +220,7 @@ mod tests {
         let ir = ir();
         let nfa = NFABuilder::new().ir(&ir).build();
         let p = ParserAutomaton(nfa);
-        for x in 0..20 {
+        for x in 0..100 {
             let s = format!("{:b}", x);
             assert_eq!(p.accept(s.as_bytes()), x % 3 == 0);
         }

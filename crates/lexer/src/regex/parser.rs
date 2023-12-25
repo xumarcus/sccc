@@ -1,79 +1,102 @@
-use std::rc::{Rc, Weak};
+use std::{
+    ops::RangeInclusive,
+    rc::{Rc, Weak},
+};
 
 use crate::combinator::*;
 
-use super::ast::{AST::{*, self}, MetaCharacter};
+use super::ast::{
+    CharacterClass, CharacterClassItem, MetaCharacter,
+    AST::{self, *},
+};
 
-const ESCAPED: [u8; 12] = [
-    b'.', b'*', b'+', b'?', b'|', b'(', b')', b'[', b']', b'{', b'}', b'\\',
+const ESCAPED: [u8; 14] = [
+    b'^', b'-', b'.', b'*', b'+', b'?', b'|', b'(', b')', b'[', b']', b'{',
+    b'}', b'\\',
 ];
 
-fn ast_escaped() -> impl Parser<Item = AST> {
+fn meta() -> impl Parser<Item = MetaCharacter> {
     use MetaCharacter::*;
-    satisfy(b'\\').then(
-        ParserChar
-            .filter_map(|x| match x {
-                b'd' => Some(D),
-                b'h' => Some(H),
-                b'l' => Some(L),
-                b's' => Some(S),
-                b'w' => Some(W),
-                _ => None,
-            })
-            .map(Meta),
-    )
+    satisfy(b'\\')
+        .then(ParserChar.filter_map(|x| match x {
+            b'd' => Some(D),
+            b'h' => Some(H),
+            b'l' => Some(L),
+            b's' => Some(S),
+            b'w' => Some(W),
+            _ => None,
+        }))
+        .or(satisfy(b'.').map(|_| Dot))
 }
 
-fn ast_char() -> impl Parser<Item = u8> {
+fn char() -> impl Parser<Item = u8> {
     satisfy(b'\\')
         .then(ParserChar.filter(|x| ESCAPED.contains(x)))
         .or(ParserChar.filter(|x| !ESCAPED.contains(x)))
 }
 
+fn atom() -> impl Parser<Item = CharacterClassItem> {
+    char()
+        .map(CharacterClassItem::Byte)
+        .or(meta().map(CharacterClassItem::Meta))
+}
+
 fn ast_ccls() -> impl Parser<Item = AST> {
     between(
-        ast_char().collect().filter(|v| !v.is_empty()).map(CCls),
+        optional(satisfy(b'^'))
+            .zip_with(
+                char()
+                    .zip_with(satisfy(b'-').then(char()), RangeInclusive::new)
+                    .map(CharacterClassItem::ByteRange)
+                    .or(atom())
+                    .collect(),
+                |opt, v| {
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some(WithCharacterClass(CharacterClass::new(
+                            opt.is_some(),
+                            v,
+                        )))
+                    }
+                },
+            )
+            .filter_map(|x| x),
         b'[',
         b']',
     )
-}
-
-fn ast_atom() -> impl Parser<Item = AST> {
-    ast_ccls()
-        .or(ast_escaped())
-        .or(ast_char().map(AST::Char))
-        .or(satisfy(b'.').map(|_| Dot))
-}
-
-fn cons(x: u8) -> Option<Box<dyn Fn(Box<AST>) -> AST>> {
-    match x {
-        b'*' => Some(Box::new(Star)),
-        b'+' => Some(Box::new(Plus)),
-        b'?' => Some(Box::new(QnMk)),
-        _ => None,
-    }
 }
 
 pub(crate) fn ast_regex() -> Rc<Box<dyn Parser<Item = AST>>> {
     Rc::new_cyclic(|me: &Weak<Box<dyn Parser<Item = AST>>>| {
         Box::new(
             intersperse(
-                ast_atom()
+                atom()
+                    .map(|x| WithCharacterClass(CharacterClass::from(x)))
+                    .or(ast_ccls())
                     .or(between(me.clone(), b'(', b')')
-                        .and(ParserChar.filter_map(cons))
-                        .map(|(ast, constructor)| constructor(Box::new(ast))))
+                        .zip_with(ParserChar, |ast, x| {
+                            let ast = Box::new(ast);
+                            match x {
+                                b'*' => Some(Star(ast)),
+                                b'+' => Some(Plus(ast)),
+                                b'?' => Some(QnMk(ast)),
+                                _ => None,
+                            }
+                        })
+                        .filter_map(|x| x))
                     .collect()
                     .filter_map(|mut v| match v.len() {
                         0 => None,
                         1 => v.pop(),
-                        _ => Some(Conc(v)),
+                        _ => Some(Concatenation(v)),
                     }),
                 b'|',
             )
             .filter_map(|mut v| match v.len() {
                 0 => None,
                 1 => v.pop(),
-                _ => Some(Altr(v)),
+                _ => Some(Alternation(v)),
             }),
         )
     })
@@ -84,64 +107,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pat_escaped() {
-        let pattern = r"\d".as_bytes();
-        assert!(ast_escaped().accept(pattern));
+    fn pat_meta() {
+        let pattern = r".".as_bytes();
+        assert!(meta().accept(pattern));
+    }
+
+    #[test]
+    fn pat_atom() {
+        let pattern = r"a".as_bytes();
+        assert!(atom().accept(pattern));
     }
 
     #[test]
     fn pat_ccls() {
-        let pattern = r"[a\[\]c]".as_bytes();
+        let pattern = r"[a\[\d\]c]".as_bytes();
         assert!(ast_ccls().accept(pattern));
     }
 
     #[test]
-    fn pat_atom_char() {
+    fn pat_ccls_range() {
+        let pattern = r"[eb-da]".as_bytes();
+        assert!(ast_ccls().accept(pattern));
+    }
+
+    #[test]
+    fn pat_ccls_range_neg() {
+        let pattern = r"[^b-d\d]".as_bytes();
+        assert!(ast_ccls().accept(pattern));
+    }
+
+    #[test]
+    fn pat_regex_single_char() {
         let pattern = r"a".as_bytes();
-        assert!(ast_atom().accept(pattern));
+        assert!(ast_regex().accept(pattern));
     }
 
     #[test]
-    fn pat_atom_bad_char() {
-        let pattern = r"*".as_bytes();
-        assert!(!ast_atom().accept(pattern));
-    }
-
-    #[test]
-    fn pat_regex_spq() {
+    fn pat_regex_qnmk() {
         let pattern = r"(a)?".as_bytes();
         assert!(ast_regex().accept(pattern));
     }
 
     #[test]
-    fn pat_char() {
-        let pattern = r"a".as_bytes();
-        assert!(ast_regex().accept(pattern));
-    }
-
-    #[test]
-    fn pat_no_bracket() {
+    fn pat_regex_no_bracket() {
         let pattern = r"\w?".as_bytes();
-        assert!(matches!(
-            ast_regex().run(pattern),
-            Some((Meta(MetaCharacter::W), [b'?']))
-        ));
+        assert!(!ast_regex().accept(pattern));
     }
 
     #[test]
-    fn pat_altr() {
-        let pattern = r"a|b".as_bytes();
-        assert!(matches!(ast_regex().run(pattern), Some((Altr(_), []))));
-    }
-
-    #[test]
-    fn pat_conc() {
-        let pattern = r"ab".as_bytes();
-        assert!(matches!(ast_regex().run(pattern), Some((Conc(_), []))));
-    }
-
-    #[test]
-    fn pat_altr_conc() {
+    fn pat_regex_altr_conc() {
         let pattern = r"a|bc".as_bytes();
         assert!(ast_regex().accept(pattern));
     }
@@ -167,6 +181,12 @@ mod tests {
     #[test]
     fn pat_4() {
         let pattern = r"a|(b(cd)*)?e".as_bytes();
+        assert!(ast_regex().accept(pattern));
+    }
+
+    #[test]
+    fn pat_5() {
+        let pattern = r"(\-)?[1-9](\d)+".as_bytes();
         assert!(ast_regex().accept(pattern));
     }
 }

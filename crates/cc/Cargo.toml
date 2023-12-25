@@ -7,4 +7,6 @@ edition = "2021"
 
 [dependencies]
 lexer = { path = "../lexer" }
+
+anyhow = "1.0"
 casey = "0.4"

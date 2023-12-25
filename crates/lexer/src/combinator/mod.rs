@@ -21,11 +21,15 @@ pub trait Parser {
     {
         Collect(self)
     }
-    fn and<Q: Parser>(self, other: Q) -> And<Self, Q>
+    fn zip_with<Q: Parser, T, F: Fn(Self::Item, Q::Item) -> T>(
+        self,
+        other: Q,
+        f: F,
+    ) -> ZipWith<Self, Q, T, F>
     where
         Self: Sized,
     {
-        And(self, other)
+        ZipWith(self, other, f)
     }
     fn or<Q: Parser<Item = Self::Item>>(self, other: Q) -> Or<Self, Q>
     where
@@ -94,13 +98,19 @@ impl<P: Parser> Parser for Collect<P> {
     }
 }
 
-pub struct And<P: Parser, Q: Parser>(P, Q);
-impl<P: Parser, Q: Parser> Parser for And<P, Q> {
-    type Item = (P::Item, Q::Item);
+pub struct ZipWith<P: Parser, Q: Parser, T, F: Fn(P::Item, Q::Item) -> T>(
+    P,
+    Q,
+    F,
+);
+impl<P: Parser, Q: Parser, T, F: Fn(P::Item, Q::Item) -> T> Parser
+    for ZipWith<P, Q, T, F>
+{
+    type Item = T;
     fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
         let (x, t) = self.0.run(s)?;
         let (y, u) = self.1.run(t)?;
-        Some(((x, y), u))
+        Some((self.2(x, y), u))
     }
 }
 
@@ -175,8 +185,20 @@ impl Parser for ParserChar {
     }
 }
 
+pub struct ParserEmpty;
+impl Parser for ParserEmpty {
+    type Item = ();
+    fn run<'a>(&self, s: &'a [u8]) -> Option<(Self::Item, &'a [u8])> {
+        Some(((), s))
+    }
+}
+
 pub fn satisfy(a: u8) -> impl Parser<Item = ()> {
     ParserChar.filter_map(move |x| if x == a { Some(()) } else { None })
+}
+
+pub fn optional<P: Parser>(p: P) -> impl Parser<Item = Option<P::Item>> {
+    p.map(Some).or(ParserEmpty.map(|_| None))
 }
 
 pub fn between<P: Parser>(p: P, op: u8, cl: u8) -> impl Parser<Item = P::Item> {
@@ -189,7 +211,7 @@ pub fn intersperse<P: Parser>(
 ) -> impl Parser<Item = Vec<P::Item>> {
     let p1 = Rc::new(p);
     let p2 = Rc::clone(&p1);
-    p1.and(satisfy(sep).then(p2).collect()).map(|(x, mut v)| {
+    p1.zip_with(satisfy(sep).then(p2).collect(), |x, mut v| {
         v.insert(0, x);
         v
     })
