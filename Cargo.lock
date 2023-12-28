@@ -42,6 +42,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "lalr"
+version = "0.1.0"
+
+[[package]]
 name = "lexer"
 version = "0.1.0"
 dependencies = [
@@ -71,6 +75,7 @@ name = "sccc"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "lalr",
  "lexer",
 ]
 
