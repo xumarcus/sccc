@@ -2,7 +2,6 @@ use super::combinator::Parser;
 
 pub(super) mod dfa;
 pub(super) mod nfa;
-mod util;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Category(pub(crate) usize);
@@ -49,3 +48,5 @@ impl<T: Automaton> Parser for ParserAutomaton<T> {
         r
     }
 }
+
+pub const SIGMA: usize = 256;

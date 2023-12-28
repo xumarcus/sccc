@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::Automaton;
-use super::{nfa::NFA, util::SIGMA, Category};
+use super::{SIGMA, nfa::NFA, Category};
 use bit_set::BitSet;
 
 #[derive(Clone, Copy, Debug)]

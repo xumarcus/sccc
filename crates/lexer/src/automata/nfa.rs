@@ -1,4 +1,4 @@
-use super::{util::*, Automaton, Category, IR};
+use super::{SIGMA, Automaton, Category, IR};
 use bit_set::{self, BitSet};
 use std::fmt::{self, Debug, Formatter};
 
@@ -12,7 +12,7 @@ impl Default for NFANode {
     fn default() -> Self {
         Self {
             epsilon: BitSet::new(),
-            t: initialize(BitSet::new),
+            t: std::array::from_fn(|_| BitSet::new()),
         }
     }
 }
