@@ -42,8 +42,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "intset"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c0c5728a5d09022d01c6f8a716796123933297460344501b25d2e1bfd8e1db2"
+
+[[package]]
 name = "lalr"
 version = "0.1.0"
+dependencies = [
+ "intset",
+]
 
 [[package]]
 name = "lexer"
